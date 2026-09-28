@@ -167,3 +167,5 @@ make_submission.sh
 
 data/*
 !data/model_save.pt
+
+README.md
