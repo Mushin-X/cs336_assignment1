@@ -167,5 +167,3 @@ make_submission.sh
 
 data/*
 !data/best_model_save.pt
-
-README.md
