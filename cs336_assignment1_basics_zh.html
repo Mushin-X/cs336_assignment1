@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS336 作业 1（基础）：构建 Transformer 语言模型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true
+  },
+  options: {
+    ignoreHtmlClass: 'no-math'
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
+<style>
+:root {
+  --orange: #FF851B;
+  --blue: #0074D9;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: auto; }
+body {
+  margin: 0;
+  background: #ffffff;
+  color: #000000;
+  font-family: 'STIX Two Text', 'Latin Modern Roman', 'CMU Serif', 'Computer Modern',
+               Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 56px 48px 96px;
+}
+
+/* ---------- Title block ---------- */
+.doc-title {
+  text-align: center;
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1.28;
+  margin: 0 0 26px;
+}
+.title-sub { text-align: center; }
+.title-version { font-size: 0.92em; color: #3a3a3a; }
+.title-team { font-weight: 700; margin-top: 16px; }
+.title-date { margin-top: 6px; }
+
+/* ---------- Note ---------- */
+blockquote.note {
+  margin: 24px 0;
+  padding: 12px 18px;
+  border-left: 3px solid #9e9e9e;
+  background: #f5f5f5;
+  color: #333;
+  font-size: 0.92em;
+}
+blockquote.note p { margin: 0; }
+
+/* ---------- Headings ---------- */
+h1, h2, h3, h4, h5 { font-family: inherit; font-weight: 700; color: #000; }
+h2 {
+  font-size: 1.42em;
+  margin: 2.2em 0 0.7em;
+  padding-bottom: 0.2em;
+}
+h3 { font-size: 1.18em; margin: 1.8em 0 0.55em; }
+h4 { font-size: 1.04em; margin: 1.5em 0 0.45em; }
+h5 { font-size: 0.99em; margin: 1.4em 0 0.4em; }
+
+/* ---------- Paragraphs / lists ---------- */
+p { margin: 0 0 0.9em; }
+ol, ul { margin: 0 0 1em; padding-left: 1.7em; }
+li { margin: 0.25em 0; }
+li > p { margin: 0; }
+
+/* ---------- Code ---------- */
+code {
+  font-family: 'DejaVu Sans Mono', Consolas, 'Cascadia Code', 'Courier New', monospace;
+  font-size: 0.88em;
+}
+pre.codeblock {
+  font-family: 'DejaVu Sans Mono', Consolas, 'Cascadia Code', 'Courier New', monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  margin: 1.1em 0;
+  padding: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+pre.codeblock code { font-size: inherit; }
+
+/* ---------- Boxes ---------- */
+.box {
+  border: 2px solid var(--orange);
+  padding: 12px 16px 14px;
+  margin: 1.4em 0;
+  break-inside: avoid;
+}
+.box-orange { border-color: var(--orange); }
+.box-blue { border-color: var(--blue); }
+.box-title { margin: 0 0 0.55em; }
+.box-title strong { font-weight: 700; }
+.box-title code {
+  font-weight: 700;
+  font-size: 0.82em;
+}
+.box > p:last-child { margin-bottom: 0; }
+
+/* ---------- Math ---------- */
+.math-inline { }
+.mjx-chtml { font-size: 1.0em !important; }
+.math-display {
+  margin: 1.2em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ---------- Figures ---------- */
+.figure {
+  margin: 1.6em auto;
+  text-align: center;
+}
+.figure img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #e0e0e0;
+}
+.figure figcaption {
+  margin-top: 0.5em;
+  font-size: 0.9em;
+  color: #222;
+}
+.figure-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 1.6em 0;
+}
+.figure-row .figure {
+  flex: 1 1 0;
+  min-width: 260px;
+  margin: 0;
+}
+
+/* ---------- Footnotes ---------- */
+.footnote {
+  font-size: 0.78em;
+  color: #333;
+  margin: 0.5em 0 0.9em;
+  padding-top: 0.4em;
+}
+
+/* ---------- Algorithm caption ---------- */
+.caption {
+  text-align: center;
+  font-weight: 700;
+  margin: 0.4em 0 1.4em;
+}
+
+/* ---------- References ---------- */
+p.ref {
+  font-size: 0.88em;
+  margin: 0.35em 0;
+  padding-left: 1.6em;
+  text-indent: -1.6em;
+}
+
+a { color: #0645ad; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- Table of contents ---------- */
+#toc {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 100vh;
+  overflow-y: auto;
+  background: #fafafa;
+  border-right: 1px solid #e3e3e3;
+  padding: 18px 16px 32px;
+  z-index: 1000;
+  transition: transform 0.22s ease;
+}
+body.toc-hidden #toc { transform: translateX(-100%); }
+.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 1.05em;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e3e3e3;
+}
+.toc-close {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-size: 1.3em;
+  line-height: 1;
+  color: #555;
+  padding: 0 4px;
+}
+.toc-close:hover { color: #000; }
+#toc-toggle {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  display: none;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #333;
+  padding: 6px 12px;
+  font-size: 0.9em;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+body.toc-hidden #toc-toggle { display: inline-block; }
+.toc-list { list-style: none; margin: 0; padding: 0; }
+.toc-list li { margin: 0.14em 0; line-height: 1.45; }
+.toc-list a { color: #333; text-decoration: none; display: block; }
+.toc-list a:hover { color: #0645ad; text-decoration: underline; }
+.toc-list li.toc-l3 { padding-left: 14px; font-size: 0.93em; }
+.toc-list li.toc-l4 { padding-left: 28px; font-size: 0.87em; }
+.toc-list li.toc-l4 a { color: #555; }
+@media (min-width: 1180px) {
+  body:not(.toc-hidden) { padding-left: 300px; }
+}
+
+@media print {
+  body { font-size: 11pt; padding-left: 0 !important; }
+  #toc, #toc-toggle { display: none !important; }
+  .container { max-width: none; padding: 0; }
+}
+</style>
+</head>
+<body>
+<nav id="toc">
+  <div class="toc-header">
+    <span>目录</span>
+    <button id="toc-close" class="toc-close" type="button" title="隐藏目录">&times;</button>
+  </div>
+  <ul class="toc-list"><li class="toc-l2"><a href="#1">1 作业概述</a></li><li class="toc-l2"><a href="#2">2 字节对编码（BPE）分词器</a></li><li class="toc-l3"><a href="#2-1">2.1 Unicode 标准</a></li><li class="toc-l3"><a href="#2-2">2.2 Unicode 编码</a></li><li class="toc-l3"><a href="#2-3">2.3 子词分词</a></li><li class="toc-l3"><a href="#2-4">2.4 BPE 分词器训练</a></li><li class="toc-l3"><a href="#2-5">2.5 BPE 分词器训练实验</a></li><li class="toc-l4"><a href="#sec-1">优化合并步骤</a></li><li class="toc-l3"><a href="#2-6">2.6 BPE 分词器：编码与解码</a></li><li class="toc-l4"><a href="#2-6-1">2.6.1 编码文本</a></li><li class="toc-l4"><a href="#2-6-2">2.6.2 解码文本</a></li><li class="toc-l3"><a href="#2-7">2.7 实验</a></li><li class="toc-l2"><a href="#3">3 Transformer 语言模型架构</a></li><li class="toc-l3"><a href="#3-1">3.1 Transformer LM</a></li><li class="toc-l3"><a href="#3-2">3.2 说明：批处理、Einsum 与高效计算</a></li><li class="toc-l4"><a href="#3-2-1">3.2.1 数学记号与内存顺序</a></li><li class="toc-l3"><a href="#3-3">3.3 基本构建块：Linear 与 Embedding 模块</a></li><li class="toc-l4"><a href="#3-3-1">3.3.1 参数初始化</a></li><li class="toc-l4"><a href="#3-3-2">3.3.2 Linear 模块</a></li><li class="toc-l4"><a href="#3-3-3">3.3.3 Embedding 模块</a></li><li class="toc-l3"><a href="#3-4">3.4 Pre-Norm Transformer 块</a></li><li class="toc-l4"><a href="#3-4-1">3.4.1 Root Mean Square 层归一化</a></li><li class="toc-l4"><a href="#3-4-2">3.4.2 按位置的前馈网络（Position-Wise Feed-Forward Network）</a></li><li class="toc-l4"><a href="#3-4-3">3.4.3 相对位置嵌入</a></li><li class="toc-l4"><a href="#3-4-4">3.4.4 缩放点积注意力</a></li><li class="toc-l4"><a href="#3-4-5">3.4.5 因果多头自注意力</a></li><li class="toc-l3"><a href="#3-5">3.5 完整的 Transformer LM</a></li><li class="toc-l2"><a href="#4">4 训练 Transformer LM</a></li><li class="toc-l3"><a href="#4-1">4.1 交叉熵损失</a></li><li class="toc-l3"><a href="#4-2">4.2 SGD 优化器</a></li><li class="toc-l4"><a href="#4-2-1">4.2.1 在 PyTorch 中实现 SGD</a></li><li class="toc-l3"><a href="#4-3">4.3 AdamW</a></li><li class="toc-l3"><a href="#4-4">4.4 学习率调度</a></li><li class="toc-l3"><a href="#4-5">4.5 梯度裁剪</a></li><li class="toc-l2"><a href="#5">5 训练循环</a></li><li class="toc-l3"><a href="#5-1">5.1 数据加载器</a></li><li class="toc-l3"><a href="#5-2">5.2 检查点</a></li><li class="toc-l3"><a href="#5-3">5.3 训练循环</a></li><li class="toc-l2"><a href="#6">6 生成文本</a></li><li class="toc-l2"><a href="#7">7 实验</a></li><li class="toc-l3"><a href="#7-1">7.1 如何运行实验与提交内容</a></li><li class="toc-l3"><a href="#7-2">7.2 TinyStories</a></li><li class="toc-l4"><a href="#7-2-1">7.2.1 超参数调整</a></li><li class="toc-l4"><a href="#7-2-2">7.2.2 组合到一起</a></li><li class="toc-l4"><a href="#7-2-3">7.2.3 调试模型架构的技巧</a></li><li class="toc-l3"><a href="#7-3">7.3 消融与架构修改</a></li><li class="toc-l3"><a href="#7-4">7.4 在 OpenWebText 上运行</a></li><li class="toc-l3"><a href="#7-5">7.5 你自己的修改 + 排行榜</a></li><li class="toc-l3"><a href="#sec-2">参考文献</a></li></ul>
+</nav>
+<button id="toc-toggle" type="button" title="显示目录">目录</button>
+<div class="container">
+<h1 class="doc-title">CS336 作业 1（基础）：构建 Transformer 语言模型</h1>
+<div class="title-sub title-version">版本 26.0.3</div>
+<div class="title-sub title-team">CS336 教学团队</div>
+<div class="title-sub title-date">2026 年春季</div>
+<blockquote class="note"><p>说明：本译文保留原文中的英文专业术语；原文中的插图（图 1、图 2、图 3）请参阅原始 PDF 文件。</p></blockquote>
+<h2 id="1">1 作业概述</h2>
+<p>本作业中，你将从头构建训练一个标准 Transformer 语言模型（LM）所需的全部组件，并训练一些模型。</p>
+<h5>你将实现的内容</h5>
+<ol><li>Byte-pair encoding（BPE）分词器（第 2 节）</li><li>Transformer 语言模型（LM）（第 3 节）</li><li>交叉熵损失函数与 AdamW 优化器（第 4 节）</li><li>训练循环，支持序列化与加载模型及优化器状态（第 5 节）</li></ol>
+<h5>你将运行的内容</h5>
+<ol><li>在 TinyStories 数据集上训练 BPE 分词器。</li><li>用训练好的分词器对数据集进行编码，将其转换为整数 ID 序列。</li><li>在 TinyStories 数据集上训练 Transformer LM。</li><li>使用训练好的 Transformer LM 生成样本并评估困惑度（perplexity）。</li><li>在 OpenWebText 上训练模型，并将你得到的困惑度提交到排行榜。</li></ol>
+<h5>你可以使用的内容</h5>
+<p>我们希望你能从头构建每个组件。特别地，除了以下内容，你不可以使用 torch.nn、torch.nn.functional 或 torch.optim 中的任何定义：</p>
+<ul><li>torch.nn.Parameter</li><li>torch.nn 中的容器类（例如 Module、ModuleList、Sequential 等）。¹</li><li>torch.optim.Optimizer 基类</li></ul>
+<p>你可以使用任何其他 PyTorch 定义。如果你想使用某个函数或类但不确定是否被允许，欢迎在 Slack 上提问。有疑问时，请考虑使用它是否会违背本作业「从头实现」的精神。</p>
+<h5>关于 AI 工具的声明</h5>
+<p>AI 可以完全自主地解决作业的大部分内容。这使得深入理解并学习课程材料变得更加困难。</p>
+<p>允许使用 AI 工具来回答高层次的概性问题，或提供低层次的编程文档，例如函数签名和库 API。但是，不允许使用 AI 工具来实现任何作业的任何部分。这既包括编码代理（例如 Cursor Agents、Codex、Claude Code），也包括 AI 自动补全（例如 Cursor Tab、GitHub Copilot）。使用 AI 代理时，请确保它使用了所提供的 AGENTS.md 文件。使用聊天机器人时也应附上所用的提示词（prompt）。</p>
+<p>我们强烈建议你在完成作业时在 IDE 中禁用 AI 自动补全（例如 Cursor Tab、GitHub Copilot）（不过非 AI 的自动补全，例如自动补全函数名，是完全可以的）。往届学生反映，禁用 AI 自动补全让他们更容易深入理解材料。</p>
+<p>完整的 AI 政策见本文档。</p>
+<h5>代码结构</h5>
+<p>作业代码以及本说明文档可在 GitHub 上获取：</p>
+<p>github.com/stanford-cs336/assignment1-basics</p>
+<p>请 git clone 该仓库。如有更新，我们会通知你，以便你 git pull 获取最新版本。</p>
+<ol><li>cs336_basics/*：这是你编写代码的地方。注意这里没有任何代码——你可以从头实现任何你想做的！</li><li>adapters.py：你的代码必须提供一组功能。对于每一项功能（例如 scaled dot product attention），通过简单地调用你的代码来补全其实现（例如 run_scaled_dot_product_attention）。注意：你对 adapters.py 的修改不应包含任何实质性逻辑；这只是胶水代码。</li><li>test_*.py：这里包含你必须通过的所有测试（例如 test_scaled_dot_product_attention），这些测试会调用 adapters.py 中定义的钩子。不要编辑测试文件。</li></ol>
+<h5>如何提交</h5>
+<p>要提交，运行 make_submission.sh 来构建提交用的 zip 文件。如果你有不想包含在提交 zip 中的大型数据文件或检查点，请务必将这些附加文件添加到脚本中的排除列表中。</p>
+<p>你需要向 Gradescope 提交以下文件：</p>
+<ul><li>writeup.pdf：回答所有书面问题。请排版你的回答。</li><li>code.zip：包含你编写的所有代码。</li></ul>
+<p>要向排行榜提交，请向以下仓库提交 PR：</p>
+<p>github.com/stanford-cs336/assignment1-basics-leaderboard</p>
+<p>详细提交说明见排行榜仓库中的 README.md。</p>
+<h5>在哪里获取数据集</h5>
+<p>本作业将使用两个预处理好的数据集：TinyStories [R. Eldan et al., 2023] 和 OpenWebText [A. Gokaslan et al., 2019]。两个数据集都是单个大型纯文本文件。</p>
+<p>如果你随课程一起完成作业，可以在计算指南（compute guide）中找到下载数据集的说明。</p>
+<p>如果你在家中自行跟进，可以使用 README.md 中的命令下载这些文件。</p>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：入门</strong></div>
+<p>在整个课程的作业讲义中，我们会给出一些建议，帮助你在 GPU 资源较少或没有 GPU 的情况下完成作业的部分内容。例如，我们有时会建议缩小数据集或模型规模，或解释如何在 Mac 的集成 GPU 或 CPU 上运行训练代码。你会在蓝色方框中找到这些「低资源提示」（就像本框一样）。即使你是注册的斯坦福学生、可以访问课程机器，这些提示也能帮助你更快地迭代并节省时间，因此我们建议你阅读它们！</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：在 Apple Silicon 或 CPU 上完成作业 1</strong></div>
+<p>使用官方参考实现代码，我们可以在配备 36 GB 内存的 Apple M4 Max 芯片上训练出一个能生成相当流畅文本的 LM，在 Metal GPU（MPS）上耗时不到 5 分钟，使用 CPU 约 30 分钟。如果你对这些术语不太了解，不用担心！只需知道：如果你有一台配置较新的笔记本电脑，并且你的实现正确且高效，你就能训练出一个能生成简单儿童故事、流畅度尚可的小型 LM。</p>
+<p>稍后在本作业中，我们会说明在 CPU 或 MPS 上需要做哪些修改。</p>
+</div>
+<div class="footnote">¹ 完整列表见 pytorch.org/docs/stable/nn.html#containers。</div>
+<h2 id="2">2 字节对编码（BPE）分词器</h2>
+<p>作业的第一部分，我们将训练并实现一个字节级（byte-level）字节对编码（BPE）分词器 [R. Sennrich et al., 2016; C. Wang et al., 2019]。特别地，我们将把任意（Unicode）字符串表示为一个字节序列，并在这个字节序列上训练我们的 BPE 分词器。稍后，我们将使用该分词器将文本（字符串）编码为 token（整数序列），用于语言建模。</p>
+<h3 id="2-1">2.1 Unicode 标准</h3>
+<p>Unicode 是一种文本编码标准，它将字符映射到整数码点（code point）。截至 Unicode 17.0（2025 年 9 月发布），该标准定义了 172 种文字中的 159,801 个字符。例如，字符 &quot;s&quot; 的码点为 115（通常记作 U+0073，其中 U+ 是惯用前缀，0073 是 115 的十六进制表示），字符 &quot;牛&quot; 的码点为 29275。在 Python 中，你可以使用 ord() 函数将单个 Unicode 字符转换为它的整数表示。chr() 函数则将整数 Unicode 码点转换为包含相应字符的字符串。</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">ord</span><span style="color: #000">(</span><span style="color: #198810">'牛'</span><span style="color: #000">)</span>
+<span style="color: #B60157">29275</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">chr</span><span style="color: #000">(</span><span style="color: #B60157">29275</span><span style="color: #000">)</span>
+<span style="color: #198810">'牛'</span>
+</code></pre>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>unicode1</code>）：理解 Unicode（1 分）</strong></div>
+<p>(a) chr(0) 返回什么 Unicode 字符？</p>
+<p>提交内容：一句话回答。</p>
+<p>(b) 这个字符的字符串表示（__repr__()）与它的打印表示有何不同？</p>
+<p>提交内容：一句话回答。</p>
+<p>(c) 当这个字符出现在文本中时会发生什么？在你的 Python 解释器中尝试以下内容，看看是否符合你的预期，可能会有所帮助：</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">chr</span><span style="color: #000">(</span><span style="color: #B60157">0</span><span style="color: #000">)</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span><span style="color: #4B69C6">chr</span><span style="color: #000">(</span><span style="color: #B60157">0</span><span style="color: #000">))</span>
+
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #198810">"this is a test"</span> <span style="color: #D73948">+</span> <span style="color: #4B69C6">chr</span><span style="color: #000">(</span><span style="color: #B60157">0</span><span style="color: #000">)</span> <span style="color: #D73948">+</span> <span style="color: #198810">"string"</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span><span style="color: #198810">"this is a test"</span> <span style="color: #D73948">+</span> <span style="color: #4B69C6">chr</span><span style="color: #000">(</span><span style="color: #B60157">0</span><span style="color: #000">)</span> <span style="color: #D73948">+</span> <span style="color: #198810">"string"</span><span style="color: #000">)</span>
+</code></pre>
+<p>提交内容：一句话回答。</p>
+</div>
+<h3 id="2-2">2.2 Unicode 编码</h3>
+<p>虽然 Unicode 标准定义了从字符到码点（整数）的映射，但直接在 Unicode 码点上训练分词器并不实际，因为词汇表会大得令人望而却步（约 15 万项）且十分稀疏（因为许多字符相当罕见）。相反，我们将使用一种 Unicode 编码，它将 Unicode 字符转换为字节序列。Unicode 标准本身定义了三种编码：UTF-8、UTF-16 和 UTF-32，其中 UTF-8 是互联网上的主导编码（超过 98% 的网页使用它）。</p>
+<p>要将 Unicode 字符串编码为 UTF-8，我们可以使用 Python 中的 encode() 函数。要访问 Python bytes 对象的底层字节值，我们可以对其进行迭代（例如调用 list()）。最后，我们可以使用 decode() 函数将 UTF-8 字节串解码为 Unicode 字符串。</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> test_string <span style="color: #D73948">=</span> <span style="color: #198810">"hello! こんにちは!"</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> utf8_encoded <span style="color: #D73948">=</span> test_string<span style="color: #D73948">.</span>encode<span style="color: #000">(</span><span style="color: #198810">"utf-8"</span><span style="color: #000">)</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span>utf8_encoded<span style="color: #000">)</span>
+<span style="color: #198810">b'hello! </span><span style="color: #1D6C76">\xe3\x81\x93\xe3\x82\x93\xe3\x81\xab\xe3\x81\xa1\xe3\x81\xaf</span><span style="color: #198810">!'</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span><span style="color: #4B69C6">type</span><span style="color: #000">(</span>utf8_encoded<span style="color: #000">))</span>
+<span style="color: #D73948">&lt;class</span> '<span style="color: #000">bytes</span><span style="color: #198810">'&gt;</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #74747C; font-style: italic"># 获取编码后字符串的字节值（0 到 255 的整数）。</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">list</span><span style="color: #000">(</span>utf8_encoded<span style="color: #000">)</span>
+<span style="color: #000">[</span><span style="color: #B60157">104</span><span style="color: #000">,</span> <span style="color: #B60157">101</span><span style="color: #000">,</span> <span style="color: #B60157">108</span><span style="color: #000">,</span> <span style="color: #B60157">108</span><span style="color: #000">,</span> <span style="color: #B60157">111</span><span style="color: #000">,</span> <span style="color: #B60157">33</span><span style="color: #000">,</span> <span style="color: #B60157">32</span><span style="color: #000">,</span> <span style="color: #B60157">227</span><span style="color: #000">,</span> <span style="color: #B60157">129</span><span style="color: #000">,</span> <span style="color: #B60157">147</span><span style="color: #000">,</span> <span style="color: #B60157">130</span><span style="color: #000">,</span> <span style="color: #B60157">147</span><span style="color: #000">,</span> <span style="color: #B60157">227</span><span style="color: #000">,</span> <span style="color: #B60157">129</span><span style="color: #000">,</span> <span style="color: #B60157">171</span><span style="color: #000">,</span> <span style="color: #B60157">227</span><span style="color: #000">,</span> <span style="color: #B60157">129</span><span style="color: #000">,</span> <span style="color: #B60157">161</span><span style="color: #000">,</span> <span style="color: #B60157">227</span><span style="color: #000">,</span> <span style="color: #B60157">129</span><span style="color: #000">,</span> <span style="color: #B60157">175</span><span style="color: #000">,</span> <span style="color: #B60157">33</span><span style="color: #000">]</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #74747C; font-style: italic"># 一个字节不一定对应一个 Unicode 字符！</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span><span style="color: #4B69C6">len</span><span style="color: #000">(</span>test_string<span style="color: #000">))</span>
+<span style="color: #B60157">13</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span><span style="color: #4B69C6">len</span><span style="color: #000">(</span>utf8_encoded<span style="color: #000">))</span>
+<span style="color: #B60157">23</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">print</span><span style="color: #000">(</span>utf8_encoded<span style="color: #D73948">.</span>decode<span style="color: #000">(</span><span style="color: #198810">"utf-8"</span><span style="color: #000">))</span>
+hello! こんにちは!
+</code></pre>
+<p>通过将 Unicode 码点转换为字节序列（例如通过 UTF-8 编码），我们本质上是在将一个码点序列（21 位整数，159,801 个有效值）转换为一个字节值序列（0 到 255 范围内的整数）。256 长度的字节词汇表要容易处理得多。使用字节级分词时，我们无需担心词表外（out-of-vocabulary）的 token，因为我们知道任何输入文本都可以表示为 0 到 255 的整数序列。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>unicode2</code>）：Unicode 编码（3 分）</strong></div>
+<p>(a) 相比于 UTF-16 或 UTF-32，我们更倾向于在 UTF-8 编码字节上训练分词器，有哪些原因？比较这些编码对各类输入字符串的输出可能会有所帮助。</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(b) 考虑下面这个（错误的）函数，其目的是将 UTF-8 字节串解码为 Unicode 字符串。为什么这个函数是错误的？给出一个会得到错误结果的输入字节串示例。</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">decode_utf8_bytes_to_str_wrong(</span>bytestring<span style="color: #000">:</span> <span style="color: #4B69C6">bytes</span><span style="color: #000">):</span>
+    <span style="color: #D73948">return</span> <span style="color: #198810">""</span><span style="color: #D73948">.</span>join<span style="color: #000">([</span><span style="color: #4B69C6">bytes</span><span style="color: #000">([</span>b<span style="color: #000">])</span><span style="color: #D73948">.</span>decode<span style="color: #000">(</span><span style="color: #198810">"utf-8"</span><span style="color: #000">)</span> <span style="color: #D73948">for</span> b <span style="color: #D73948">in</span> bytestring<span style="color: #000">])</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> decode_utf8_bytes_to_str_wrong<span style="color: #000">(</span><span style="color: #198810">"hello"</span><span style="color: #D73948">.</span>encode<span style="color: #000">(</span><span style="color: #198810">"utf-8"</span><span style="color: #000">))</span>
+<span style="color: #198810">'hello'</span>
+</code></pre>
+<p>提交内容：一个使 decode_utf8_bytes_to_str_wrong 产生错误输出的输入字节串示例，并用一句话解释该函数为何错误。</p>
+<p>(c) 给出一个不能解码为任何 Unicode 字符的两字节序列。</p>
+<p>提交内容：一个示例，附一句话解释。</p>
+</div>
+<h3 id="2-3">2.3 子词分词</h3>
+<p>虽然字节级分词可以缓解词级（word-level）分词器面临的词表外问题，但将文本分词为字节会产生极长的输入序列。这会拖慢模型训练，因为一个 10 个词的句子在词级语言模型中可能只有 10 个 token，但在字符级模型中可能有 50 个或更多 token（取决于词的长度）。处理这些更长的序列需要在模型的每一步进行更多计算。此外，在字节序列上进行语言建模很困难，因为更长的输入序列会在数据中产生长程依赖。</p>
+<p>子词（subword）分词是词级分词器和字节级分词器之间的折中方案。注意，字节级分词器的词汇表有 256 项（字节值从 0 到 255）。子词分词器以更大的词汇表来换取对输入字节序列更好的压缩。例如，如果字节序列 b&#x27;the&#x27; 经常出现在我们的原始文本训练数据中，为它分配一个词汇表条目就能将这个 3-token 序列缩减为单个 token。</p>
+<p>我们如何选择要加入词汇表的子词单元？[R. Sennrich et al. 3] 提出使用字节对编码（BPE；[P. Gage 5]），这是一种压缩算法，它迭代地将最频繁的字节对替换（「合并」）为一个新的、未使用的索引。注意，该算法向词汇表添加子词 token 以最大化对输入序列的压缩——如果一个词在输入文本中出现次数足够多，它就会被表示为一个单独的子词单元。</p>
+<p>使用通过 BPE 构建的词汇表的子词分词器通常被称为 BPE 分词器。在本作业中，我们将实现一个字节级 BPE 分词器，其中词汇表项是字节或合并后的字节序列，这让我们在词表外处理和可控的输入序列长度两方面兼得好处。构建 BPE 分词器词汇表的过程被称为「训练」BPE 分词器。</p>
+<h3 id="2-4">2.4 BPE 分词器训练</h3>
+<p>BPE 分词器训练过程包括三个主要步骤。</p>
+<h5>词汇表初始化</h5>
+<p>分词器词汇表是从字节串 token 到整数 ID 的一一映射。由于我们训练的是字节级 BPE 分词器，初始词汇表就是所有字节的集合。由于有 256 种可能的字节值，我们的初始词汇表大小为 256。</p>
+<h5>预分词（Pre-tokenization）</h5>
+<p>有了词汇表之后，原则上你可以统计文本中字节彼此相邻出现的频率，并从最频繁的字节对开始合并。然而，这在计算上相当昂贵，因为每次合并我们都要对语料库完整遍历一遍。此外，直接在语料库上合并字节可能会产生仅在标点符号上不同的 token（例如 dog! 与 dog.）。这些 token 会得到完全不同的 token ID，尽管它们很可能具有很高的语义相似性（因为它们仅在标点上不同）。</p>
+<p>为避免这一点，我们对语料库进行预分词。你可以把它理解为对语料库的一种粗粒度分词，帮助我们统计字符对出现的频率。例如，单词 &#x27;text&#x27; 可能是一个出现了 10 次的 pre-token。在这种情况下，当我们统计字符 &#x27;t&#x27; 和 &#x27;e&#x27; 相邻出现的频率时，我们会看到单词 &#x27;text&#x27; 中 &#x27;t&#x27; 和 &#x27;e&#x27; 相邻，因此可以将它们的计数加 10，而不必遍历语料库。由于我们训练的是字节级 BPE 模型，每个 pre-token 都表示为一个 UTF-8 字节序列。</p>
+<p>[R. Sennrich et al. 3] 的原始 BPE 实现通过简单地在空白处切分来进行预分词（即 s.split(&quot; &quot;)）。这种方法仍然存在于基于 SentencePiece 的分词器中（例如 Llama 1 和 2 的分词器）。</p>
+<p>大多数现代分词器使用基于正则表达式的预分词器，这一做法来自 GPT-2；[A. Radford et al. 6]。我们将使用该原始正则表达式的一个稍微更整洁的版本，取自 github.com/openai/tiktoken/pull/234/files：</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> PAT <span style="color: #D73948">=</span> <span style="color: #198810">r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""</span>
+</code></pre>
+<p>用这个预分词器交互式地切分一些文本，可能有助于你更好地理解它的行为：</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #74747C; font-style: italic"># 需要 `regex` 包</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #D73948">import</span> <span style="color: #000">regex</span> <span style="color: #D73948">as</span> <span style="color: #000">re</span>
+<span style="color: #D73948">&gt;&gt;&gt;</span> re<span style="color: #D73948">.</span>findall<span style="color: #000">(</span>PAT<span style="color: #000">,</span> <span style="color: #198810">"some text that i'll pre-tokenize"</span><span style="color: #000">)</span>
+<span style="color: #000">[</span><span style="color: #198810">'some'</span><span style="color: #000">,</span> <span style="color: #198810">' text'</span><span style="color: #000">,</span> <span style="color: #198810">' that'</span><span style="color: #000">,</span> <span style="color: #198810">' i'</span><span style="color: #000">,</span> <span style="color: #198810">"'ll"</span><span style="color: #000">,</span> <span style="color: #198810">' pre'</span><span style="color: #000">,</span> <span style="color: #198810">'-'</span><span style="color: #000">,</span> <span style="color: #198810">'tokenize'</span><span style="color: #000">]</span>
+</code></pre>
+<p>不过，在你的代码中使用它时，你应该使用 re.finditer，以避免在构建从 pre-token 到其计数的映射时存储预分词后的单词。</p>
+<h5>计算 BPE 合并</h5>
+<p>现在我们已经把输入文本转换为 pre-token，并将每个 pre-token 表示为一个 UTF-8 字节序列，就可以计算 BPE 合并（即训练 BPE 分词器）了。从高层次上看，BPE 算法迭代地统计每个字节对，并识别出频率最高的字节对（&quot;A&quot;, &quot;B&quot;）。这个最频繁字节对（&quot;A&quot;, &quot;B&quot;）的每次出现随后被合并，即替换为一个新 token &quot;AB&quot;。这个新的合并 token 被加入词汇表；因此，BPE 训练后的最终词汇表大小为初始词汇表大小（我们的情况是 256）加上训练期间执行的 BPE 合并操作次数。为了提高 BPE 训练的效率，我们不考虑跨越 pre-token 边界的字节对。² 在计算合并时，通过对字节对频率的平局做确定性处理——优先选择字典序更大的字节对。例如，如果字节对（&quot;A&quot;, &quot;B&quot;）、（&quot;A&quot;, &quot;C&quot;）、（&quot;B&quot;, &quot;ZZ&quot;）和（&quot;BA&quot;, &quot;A&quot;）都具有最高频率，我们会合并（&quot;BA&quot;, &quot;A&quot;）：</p>
+<pre class="codeblock"><code><span style="color: #D73948">&gt;&gt;&gt;</span> <span style="color: #4B69C6">max</span><span style="color: #000">([(</span><span style="color: #198810">"A"</span><span style="color: #000">,</span> <span style="color: #198810">"B"</span><span style="color: #000">),</span> <span style="color: #000">(</span><span style="color: #198810">"A"</span><span style="color: #000">,</span> <span style="color: #198810">"C"</span><span style="color: #000">),</span> <span style="color: #000">(</span><span style="color: #198810">"B"</span><span style="color: #000">,</span> <span style="color: #198810">"ZZ"</span><span style="color: #000">),</span> <span style="color: #000">(</span><span style="color: #198810">"BA"</span><span style="color: #000">,</span> <span style="color: #198810">"A"</span><span style="color: #000">)])</span>
+<span style="color: #000">(</span><span style="color: #198810">'BA'</span><span style="color: #000">,</span> <span style="color: #198810">'A'</span><span style="color: #000">)</span>
+</code></pre>
+<div class="footnote">² 注意，R. Sennrich et al. [3] 的原始 BPE 公式指定要包含一个词尾（end-of-word）token。在训练字节级 BPE 模型时我们不添加词尾 token，因为所有字节（包括空白和标点）都已包含在模型的词汇表中。由于我们显式地表示空格和标点，学习到的 BPE 合并自然会反映这些词边界。</div>
+<h5>特殊 token</h5>
+<p>通常，一些字符串（例如 &lt;|endoftext|&gt;）被用来编码元数据（例如文档之间的边界）。在编码文本时，通常希望将某些字符串视为「特殊 token」，它们永远不应被拆分为多个 token（即始终作为单个 token 保留）。例如，序列结束字符串 &lt;|endoftext|&gt; 应始终作为单个 token（即单个整数 ID）保留，这样我们就能知道何时停止从语言模型生成。这些特殊 token 必须加入词汇表，从而拥有对应的固定 token ID。</p>
+<p>[R. Sennrich et al. 3] 的算法 1 包含了一个低效的 BPE 分词器训练实现（本质上遵循我们上面概述的步骤）。作为第一个练习，实现并测试这个函数来检查你的理解可能会有所帮助。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>bpe_example</code>）：BPE 训练示例</strong></div>
+<p>下面是一个来自 R. Sennrich et al. [3] 的风格化示例。考虑一个由以下文本组成的语料库：</p>
+<pre class="codeblock"><code>low low low low low
+lower lower widest widest widest
+newest newest newest newest newest newest
+</code></pre>
+<p>且词汇表有一个特殊 token &lt;|endoftext|&gt;。</p>
+<p><strong>词汇表</strong></p>
+<p>我们用特殊 token &lt;|endoftext|&gt; 和 256 个字节值初始化词汇表。</p>
+<p><strong>预分词</strong></p>
+<p>为简单起见并聚焦于合并过程，我们在此示例中假设预分词只是在空白处切分。当我们进行预分词并计数时，我们得到如下频率表。</p>
+<p>{low: 5, lower: 2, widest: 3, newest: 6}</p>
+<p>把它表示为 dict[tuple[bytes, ...], int] 会很方便，例如 {(l,o,w): 5, ...}。注意，即使是单个字节，在 Python 中也是 bytes 对象。Python 中没有用来表示单个字节的 byte 类型，正如没有用来表示单个字符的 char 类型一样。</p>
+<p><strong>合并</strong></p>
+<p>我们首先查看每一对相邻字节，并求和它们出现的词的频率 {lo: 7, ow: 7, we: 8, er: 2, wi: 3, id: 3, de: 3, es: 9, st: 9, ne: 6, ew: 6}。字节对 (&#x27;e&#x27;, &#x27;s&#x27;) 和 (&#x27;s&#x27;, &#x27;t&#x27;) 频率相同，所以我们取字典序更大的字节对 (&#x27;s&#x27;, &#x27;t&#x27;)。然后我们合并 pre-token，得到 {(l,o,w): 5, (l,o,w,e,r): 2, (w,i,d,e,st): 3, (n,e,w,e,st): 6}。</p>
+<p>在第二轮中，我们看到 (e, st) 是最常见的字节对（计数为 9），我们会合并成 {(l,o,w): 5, (l,o,w,e,r): 2, (w,i,d,est): 3, (n,e,w,est): 6}。继续下去，我们最终得到的合并序列将是 [&#x27;s t&#x27;, &#x27;e st&#x27;, &#x27;o w&#x27;, &#x27;l ow&#x27;, &#x27;w est&#x27;, &#x27;ne&#x27;, &#x27;ne west&#x27;, &#x27;w i&#x27;, &#x27;wi d&#x27;, &#x27;wid est&#x27;, &#x27;low e&#x27;, &#x27;lowe r&#x27;]。</p>
+<p>如果我们进行 6 次合并，我们得到 [&#x27;s t&#x27;, &#x27;e st&#x27;, &#x27;o w&#x27;, &#x27;l ow&#x27;, &#x27;w est&#x27;, &#x27;n e&#x27;]，我们的词汇表元素将是 [&lt;|endoftext|&gt;, [...256 BYTE CHARS], st, est, ow, low, west, ne]。</p>
+<p>使用这个词汇表和合并集合，单词 newest 将被分词为 [ne, west]。</p>
+</div>
+<h3 id="2-5">2.5 BPE 分词器训练实验</h3>
+<p>让我们在 TinyStories 数据集上训练一个字节级 BPE 分词器。查找/下载数据集的说明见第 1 节。开始之前，我们建议先看一看 TinyStories 数据集，了解数据中有什么。</p>
+<h5>并行化预分词</h5>
+<p>你会发现一个主要的瓶颈是预分词步骤。你可以使用内置的 multiprocessing 库并行化你的代码来加速预分词。具体来说，我们建议在预分词的并行实现中，将语料库分块，同时确保块边界恰好落在某个特殊 token 的开头。你可以直接使用下面链接中的起始代码来获取块边界，然后用它在各进程之间分配工作：</p>
+<p><a href="https://github.com/stanford-cs336/assignment1-basics/blob/main/cs336_basics/pretokenization_example.py">https://github.com/stanford-cs336/assignment1-basics/blob/main/cs336_basics/pretokenization_example.py</a></p>
+<p>这种分块始终是有效的，因为我们绝不想跨文档边界合并。就本作业而言，你总是可以这样切分。不用担心收到一个不包含 &lt;|endoftext|&gt; 的超大语料库的边缘情况。</p>
+<h5>在预分词之前移除特殊 token</h5>
+<p>在使用正则表达式模式运行预分词之前（使用 re.finditer），你应该从语料库（或你的块，如果使用并行实现）中剥离所有特殊 token。确保你在特殊 token 上切分，这样就不会跨越它们所分隔的文本进行任何合并。例如，如果你有一个类似 [Doc 1]&lt;endoftext&gt;[Doc 2] 的语料库（或块），你应该在特殊 token &lt;|endoftext|&gt; 上切分，并分别预分词 [Doc 1] 和 [Doc 2]，这样就不会跨越文档边界进行合并。换句话说，特殊 token 在训练期间定义了硬分割边界，但它们本身不应计入合并统计。这可以使用 re.split 完成，以 &quot;|&quot;.join(special_tokens) 作为分隔符（要小心使用 re.escape，因为特殊 token 中可能出现 |）。测试 test_train_bpe_special_tokens 将对此进行测试。</p>
+<h4 id="sec-1">优化合并步骤</h4>
+<p>上面风格化示例中 BPE 训练的朴素实现很慢，因为每次合并它都要遍历所有字节对来识别最频繁的字节对。然而，每次合并后唯一发生变化的字节对计数是那些与合并字节对重叠的字节对。因此，可以通过索引所有字节对的计数并增量更新这些计数（而不是显式遍历每个字节对来统计频率）来提高 BPE 训练速度。使用这种缓存方法你可以获得显著加速，不过我们要指出，BPE 训练的合并部分在 Python 中无法并行化。</p>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：性能分析（Profiling）</strong></div>
+<p>你应该使用 cProfile 或 py-spy 等性能分析工具来识别实现中的瓶颈，并专注于优化这些瓶颈。</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：「缩小规模」（Downscaling）</strong></div>
+<p>与其直接在整个 TinyStories 数据集上训练分词器，我们建议你先在数据的一个小子集上训练：一个「调试数据集」。例如，你可以先在 TinyStories 验证集上训练分词器，它有 22K 个文档，而不是 2.12M 个。</p>
+<p>这展示了一个通用策略：尽可能缩小规模以加速开发，例如使用更小的数据集、更小的模型规模等。选择调试数据集或超参数配置的大小需要仔细考量：你希望调试集足够大，以具备与完整配置相同的瓶颈（这样你做的优化才能泛化），但又不能太大以至于运行时间过长。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>train_bpe</code>）：BPE 分词器训练（15 分）</strong></div>
+<p>提交内容：编写一个函数，给定输入文本文件的路径，训练一个（字节级）BPE 分词器。你的 BPE 训练函数应至少处理以下输入参数：</p>
+<p>input_path: str —— 包含 BPE 分词器训练数据的文本文件路径。</p>
+<p>vocab_size: int —— 一个正整数，定义最大最终词汇表大小（包括初始字节词汇表、由合并产生的词汇表项以及任何特殊 token）。</p>
+<p>special_tokens: list[str] —— 要加入词汇表的字符串列表。训练期间，将它们视为硬边界，阻止跨越其范围的合并，但在计算合并统计时不要将它们计入。</p>
+<p>你的 BPE 训练函数应返回得到的词汇表和合并列表：</p>
+<p>vocab: dict[int, bytes] —— 分词器词汇表，从 int（词汇表中的 token ID）到 bytes（token 字节）的映射。</p>
+<p>merges: list[tuple[bytes, bytes]] —— 训练产生的 BPE 合并列表。每个列表项是一个字节元组 (&lt;token1&gt;, &lt;token2&gt;)，表示 &lt;token1&gt; 与 &lt;token2&gt; 合并。合并应按创建顺序排列。</p>
+<p>要针对我们提供的测试来测试你的 BPE 训练函数，你首先需要实现 [adapters.run_train_bpe] 处的测试适配器。然后运行 uv run pytest tests/test_train_bpe.py。你的实现应能通过所有测试。可选地（这可能是一项很大的时间投入），你可以使用某种系统语言实现训练方法的关键部分，例如 C++（可考虑 cppyy 或 nanobind）或 Rust（使用 PyO3）。如果你这样做，要注意哪些操作需要复制、哪些直接从 Python 内存读取，并确保留下构建说明，或确保它仅使用 pyproject.toml 即可构建。另外注意，GPT-2 正则表达式在大多数正则引擎中支持不佳，在支持的那些引擎中也往往太慢。我们已确认 Oniguruma 速度尚可且支持负向前瞻（negative lookahead），但 Python 的 regex 包实际上甚至更快。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>train_bpe_tinystories</code>）：在 TinyStories 上训练 BPE（2 分）</strong></div>
+<p>(a) 在 TinyStories 数据集上训练一个字节级 BPE 分词器，最大词汇表大小为 10,000。务必将 TinyStories 的 &lt;|endoftext|&gt; 特殊 token 加入词汇表。将得到的词汇表和合并列表序列化到磁盘以供进一步检查。训练耗时和内存分别是多少？词汇表中最长的 token 是什么？它合理吗？</p>
+<p>资源要求：≤ 30 分钟（无 GPU），≤ 30 GB 内存</p>
+<p>提示：通过在预分词期间使用 multiprocessing 以及以下两个事实，你应该能把 BPE 训练控制在 2 分钟以内：</p>
+<p>(a) &lt;|endoftext|&gt; token 在数据文件中分隔文档。</p>
+<p>(b) &lt;|endoftext|&gt; token 在应用 BPE 合并之前作为特殊情况处理。</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(b) 对你的代码进行性能分析。分词器训练过程中哪一部分耗时最多？</p>
+<p>提交内容：一到两句话回答。</p>
+<p>接下来，我们将尝试在 OpenWebText 数据集上训练一个字节级 BPE 分词器。和之前一样，我们建议先看一看该数据集以更好地了解其内容。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>train_bpe_expts_owt</code>）：在 OpenWebText 上训练 BPE（2 分）</strong></div>
+<p>(a) 在 OpenWebText 数据集上训练一个字节级 BPE 分词器，最大词汇表大小为 32,000。将得到的词汇表和合并列表序列化到磁盘以供进一步检查。词汇表中最长的 token 是什么？它合理吗？</p>
+<p>资源要求：≤ 12 小时（无 GPU），≤ 100 GB 内存</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(b) 比较在 TinyStories 与 OpenWebText 上训练得到的分词器。</p>
+<p>提交内容：一到两句话回答。</p>
+</div>
+<h3 id="2-6">2.6 BPE 分词器：编码与解码</h3>
+<p>在作业的前一部分，我们实现了一个在输入文本上训练 BPE 分词器的函数，以获得分词器词汇表和 BPE 合并列表。现在，我们将实现一个 BPE 分词器，它加载给定的词汇表和合并列表，并用它们将文本编码为 token ID 以及将 token ID 解码为文本。</p>
+<h4 id="2-6-1">2.6.1 编码文本</h4>
+<p>通过 BPE 编码文本的过程与训练 BPE 词汇表的方式相似。主要有几个步骤。</p>
+<p>步骤 1：预分词。我们首先对序列进行预分词，并将每个 pre-token 表示为一个 UTF-8 字节序列，正如 BPE 训练中所做的那样。我们将把每个 pre-token 内的这些字节合并为词汇表元素，独立处理每个 pre-token（不跨 pre-token 边界合并）。</p>
+<p>步骤 2：应用合并。然后我们取 BPE 训练期间创建的词汇表元素合并序列，并按创建顺序将其应用到我们的 pre-token 上。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>bpe_encoding</code>）：BPE 编码示例</strong></div>
+<p>例如，假设我们的输入字符串是 &#x27;the cat ate&#x27;，我们的词汇表是 {0: b&#x27; &#x27;, 1: b&#x27;a&#x27;, 2: b&#x27;c&#x27;, 3: b&#x27;e&#x27;, 4: b&#x27;h&#x27;, 5: b&#x27;t&#x27;, 6: b&#x27;th&#x27;, 7: b&#x27; c&#x27;, 8: b&#x27; a&#x27;, 9: b&#x27;the&#x27;, 10: b&#x27; at&#x27;}，我们学到的合并是 [(b&#x27;t&#x27;, b&#x27;h&#x27;), (b&#x27; &#x27;, b&#x27;c&#x27;), (b&#x27; &#x27;, b&#x27;a&#x27;), (b&#x27;th&#x27;, b&#x27;e&#x27;), (b&#x27; a&#x27;, b&#x27;t&#x27;)]。首先，我们的预分词器会把这个字符串切分为 [&#x27;the&#x27;, &#x27; cat&#x27;, &#x27; ate&#x27;]。然后，我们查看每个 pre-token 并应用 BPE 合并。</p>
+<p>第一个 pre-token &#x27;the&#x27; 最初表示为 [b&#x27;t&#x27;, b&#x27;h&#x27;, b&#x27;e&#x27;]。查看我们的合并列表，我们识别出第一个可应用的合并是 (b&#x27;t&#x27;, b&#x27;h&#x27;)，并用它将 pre-token 转换为 [b&#x27;th&#x27;, b&#x27;e&#x27;]。然后，我们回到合并列表，识别出下一个可应用的合并是 (b&#x27;th&#x27;, b&#x27;e&#x27;)，它将 pre-token 转换为 [b&#x27;the&#x27;]。最后，再回头看合并列表，我们发现没有更多可应用于该字符串的合并了（因为整个 pre-token 已被合并为单个 token），于是我们完成了 BPE 合并的应用。对应的整数序列是 [9]。</p>
+<p>对其余 pre-token 重复此过程，我们看到 pre-token &#x27; cat&#x27; 在应用 BPE 合并后表示为 [b&#x27; c&#x27;, b&#x27;a&#x27;, b&#x27;t&#x27;]，对应整数序列 [7, 1, 5]。最后一个 pre-token &#x27; ate&#x27; 在应用 BPE 合并后是 [b&#x27; at&#x27;, b&#x27;e&#x27;]，对应整数序列 [10, 3]。因此，编码输入字符串的最终结果是 [9, 7, 1, 5, 10, 3]。</p>
+</div>
+<h5>特殊 token</h5>
+<p>你的分词器在编码文本时应能正确处理用户定义的特殊 token（在构造分词器时提供）。</p>
+<h5>内存方面的考虑</h5>
+<p>假设我们想对一个无法放入内存的大型文本文件进行分词。为了高效地对这个大文件（或任何其他数据流）进行分词，我们需要将其拆分为可管理的块并依次处理每个块，这样内存复杂度就是常数级别，而不是与文本大小成线性关系。这样做时，我们需要确保一个 token 不会跨越块边界，否则我们将得到与在内存中对整个序列分词的朴素方法不同的分词结果。</p>
+<h4 id="2-6-2">2.6.2 解码文本</h4>
+<p>要将整数 token ID 序列解码回原始文本，我们可以简单地查找每个 ID 在词汇表中的对应条目（一个字节序列），将它们连接起来，然后将字节解码为 Unicode 字符串。注意，输入 ID 不保证能映射到有效的 Unicode 字符串（因为用户可以输入任意整数 ID 序列）。如果输入的 token ID 不能产生有效的 Unicode 字符串，你应该用官方的 Unicode 替换字符 U+FFFD 替换这些格式错误的字节。³ bytes.decode 的 errors 参数控制如何处理 Unicode 解码错误，使用 errors=&#x27;replace&#x27; 会自动用替换标记替换格式错误的数据。</p>
+<div class="footnote">³ 关于 Unicode 替换字符的更多信息，见 en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character。</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>tokenizer</code>）：实现分词器（15 分）</strong></div>
+<p>提交内容：实现一个 Tokenizer 类，给定一个词汇表和一个合并列表，将文本编码为整数 ID，并将整数 ID 解码为文本。你的分词器还应支持用户提供的特殊 token（如果它们尚不在词汇表中，则将其追加）。我们推荐以下接口：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> vocab<span style="color: #000">,</span> merges<span style="color: #000">,</span> special_tokens<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    从给定词汇表、合并列表和（可选）特殊 token 列表构造一个分词器。该函数应接受以下参数：
+    vocab<span style="color: #000">:</span> <span style="color: #4B69C6">dict</span><span style="color: #000">[</span><span style="color: #4B69C6">int</span><span style="color: #000">,</span> <span style="color: #4B69C6">bytes</span><span style="color: #000">]</span>
+    merges<span style="color: #000">:</span> <span style="color: #4B69C6">list</span><span style="color: #000">[</span><span style="color: #4B69C6">tuple</span><span style="color: #000">[</span><span style="color: #4B69C6">bytes</span><span style="color: #000">,</span> <span style="color: #4B69C6">bytes</span><span style="color: #000">]]</span>
+    special_tokens<span style="color: #000">:</span> <span style="color: #4B69C6">list</span><span style="color: #000">[</span><span style="color: #4B69C6">str</span><span style="color: #000">]</span> <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span>
+
+<span style="color: #D73948">def</span> <span style="color: #000">from_files(</span><span style="color: #4B69C6">cls</span><span style="color: #000">,</span> vocab_filepath<span style="color: #000">,</span> merges_filepath<span style="color: #000">,</span> special_tokens<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    类方法，从序列化的词汇表和合并列表（格式与你的 BPE 训练代码输出相同）以及（可选）特殊 token 列表构造并返回一个 Tokenizer。该方法应接受以下附加参数：
+    vocab_filepath<span style="color: #000">:</span> <span style="color: #4B69C6">str</span>
+    merges_filepath<span style="color: #000">:</span> <span style="color: #4B69C6">str</span>
+    special_tokens<span style="color: #000">:</span> <span style="color: #4B69C6">list</span><span style="color: #000">[</span><span style="color: #4B69C6">str</span><span style="color: #000">]</span> <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span>
+
+<span style="color: #D73948">def</span> <span style="color: #000">encode(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> text<span style="color: #000">:</span> <span style="color: #4B69C6">str</span><span style="color: #000">)</span> <span style="color: #D73948">-&gt;</span> <span style="color: #4B69C6">list</span><span style="color: #000">[</span><span style="color: #4B69C6">int</span><span style="color: #000">]</span>
+    将输入文本编码为 token ID 序列。
+
+<span style="color: #D73948">def</span> <span style="color: #000">encode_iterable(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> iterable<span style="color: #000">:</span> Iterable<span style="color: #000">[</span><span style="color: #4B69C6">str</span><span style="color: #000">])</span> <span style="color: #D73948">-&gt;</span> Iterator<span style="color: #000">[</span><span style="color: #4B69C6">int</span><span style="color: #000">]</span>
+    给定一个字符串可迭代对象（例如 Python 文件句柄），返回一个惰性产出 token ID 的生成器。这对于无法直接加载到内存的大文件的高效分词是必需的。
+
+<span style="color: #D73948">def</span> <span style="color: #000">decode(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> ids<span style="color: #000">:</span> <span style="color: #4B69C6">list</span><span style="color: #000">[</span><span style="color: #4B69C6">int</span><span style="color: #000">])</span> <span style="color: #D73948">-&gt;</span> <span style="color: #4B69C6">str</span>
+    将 token ID 序列解码为文本。
+</code></pre>
+<p>要针对我们提供的测试来测试你的 Tokenizer，你首先需要实现 [adapters.get_tokenizer] 处的测试适配器。然后运行 uv run pytest tests/test_tokenizer.py。你的实现应能通过所有测试。</p>
+</div>
+<h3 id="2-7">2.7 实验</h3>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>tokenizer_experiments</code>）：分词器实验（4 分）</strong></div>
+<p>(a) 从 TinyStories 和 OpenWebText 中抽样 10 个文档。使用你之前训练好的 TinyStories 和 OpenWebText 分词器（词汇表大小分别为 10K 和 32K），将这些抽样文档编码为整数 ID。每个分词器的压缩率（字节/token）是多少？</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(b) 如果你用 TinyStories 分词器对你的 OpenWebText 样本进行分词，会发生什么？比较压缩率和/或定性描述发生的情况。</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(c) 估算你分词器的吞吐量（例如以字节/秒计）。对 Pile 数据集（825GB 文本）进行分词需要多长时间？</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(d) 使用你的 TinyStories 和 OpenWebText 分词器，将各自的训练集和开发集编码为整数 token ID 序列。稍后我们将用它来训练我们的语言模型。我们建议将 token ID 序列化为数据类型为 uint16 的 NumPy 数组。为什么 uint16 是一个合适的选择？</p>
+<p>提交内容：一到两句话回答。</p>
+</div>
+<h2 id="3">3 Transformer 语言模型架构</h2>
+<p>语言模型接收一个批量的整数 token ID 序列作为输入（即形状为 (batch_size, sequence_length) 的 torch.Tensor），并返回一个（批量的）词汇表上的归一化概率分布（即形状为 (batch_size, sequence_length, vocab_size) 的 PyTorch Tensor），其中预测的分布是针对每个输入 token 的下一个词。训练语言模型时，我们使用这些下一个词预测来计算实际下一个词与预测下一个词之间的交叉熵损失。推理时从语言模型生成文本时，我们取最后一个时间步（即序列中的最后一项）预测的下一个词分布来生成序列中的下一个 token（例如取概率最高的 token、从分布中采样等），将生成的 token 加到输入序列中，并重复此过程。</p>
+<p>本部分作业中，你将从头构建这个 Transformer 语言模型。我们先对模型做一个高层描述，然后逐步细化各个组件。</p>
+<h3 id="3-1">3.1 Transformer LM</h3>
+<p>给定一个 token ID 序列，Transformer 语言模型使用输入嵌入（embedding）将 token ID 转换为稠密向量，将嵌入后的 token 通过 num_layers 个 Transformer 块，然后应用一个可学习的线性投影（「输出嵌入」或「LM head」）来产生预测的下一个 token logits。示意表示见图 1。</p>
+<div class="figure-row"><figure class="figure"><img src="figure1.png" alt="图 1"><figcaption>图 1：我们的 Transformer 语言模型概览</figcaption></figure><figure class="figure"><img src="figure2.png" alt="图 2"><figcaption>图 2：一个 pre-norm Transformer 块</figcaption></figure></div>
+<h5>Token 嵌入</h5>
+<p>在第一步中，Transformer 将（批量的）token ID 序列嵌入为包含 token 身份信息的向量序列（图 1 中的红色块）。</p>
+<p>更具体地说，给定一个 token ID 序列，Transformer 语言模型使用一个 token 嵌入层来产生一个向量序列。每个嵌入层接收形状为 (batch_size, sequence_length) 的整数张量，并产生形状为 (batch_size, sequence_length, d_model) 的向量序列。</p>
+<h5>Pre-norm Transformer 块</h5>
+<p>嵌入之后，激活值经过几个结构相同的神经网络层处理。一个标准的 decoder-only Transformer 语言模型由 num_layers 个相同的层组成（通常称为 Transformer「块」）。每个 Transformer 块接收形状为 (batch_size, sequence_length, d_model) 的输入，并返回形状为 (batch_size, sequence_length, d_model) 的输出。每个块通过自注意力（self-attention）聚合序列中的信息，并通过前馈层对其进行非线性变换。</p>
+<p>经过 num_layers 个 Transformer 块之后，我们取最终的激活值，将其转换为词汇表上的分布。</p>
+<p>我们将实现「pre-norm」Transformer 块（详见第 3.4 节），这还需要在最后一个 Transformer 块之后使用层归一化（详见下文）以确保其输出被适当地缩放。</p>
+<p>在此归一化之后，我们将使用一个标准的可学习线性变换，将 Transformer 块的输出转换为预测的下一个 token logits（参见例如 [A. Radford et al. 7] 公式 2）。</p>
+<h3 id="3-2">3.2 说明：批处理、Einsum 与高效计算</h3>
+<p>在整个 Transformer 中，我们会对许多批处理式的输入执行相同的计算。以下是几个例子：</p>
+<ul><li>批中的元素：我们对每个批元素应用相同的 Transformer 前向运算。</li><li>序列长度：「按位置」（position-wise）的运算（如 RMSNorm 和前馈）对序列的每个位置执行完全相同的操作。</li><li>注意力头：在多头（multi-headed）注意力运算中，注意力操作是在多个注意力头上进行批处理的。</li></ul>
+<p>拥有一种既能充分利用 GPU、又易于阅读和理解的方式来完成这些运算是很有用的。许多 PyTorch 运算可以在张量开头接受额外的「批处理式」维度，并高效地跨这些维度重复/广播该运算。</p>
+<p>例如，假设我们正在做一个按位置、批处理的运算。我们有一个形状为 (batch_size, sequence_length, d_model) 的「数据张量」D，我们想对一个形状为 (d_model, d_model) 的矩阵 A 做批量向量-矩阵乘法。在这种情况下，D @ A 会进行批量矩阵乘法，这是 PyTorch 中的一个高效原语，其中 (batch_size, sequence_length) 维度被批处理。</p>
+<p>正因如此，最好假设你的函数可能会被传入额外的批处理式维度，并将这些维度保持在 PyTorch 形状的开头。为了把张量组织成可以这样批处理的形式，它们可能需要通过多步 view、reshape 和 transpose 来整形。这可能有点麻烦，而且往往让人难以读懂代码在做什么、张量的形状是什么。</p>
+<p>一个更符合人体工学的选择是使用 torch.einsum 中的 einsum 记号，或者使用 einops、einx 这类框架无关的库。两个关键运算是 einsum（可以对输入张量的任意维度做张量收缩）和 rearrange（可以对任意维度进行重排、拼接和拆分）。事实证明，机器学习中几乎所有的运算都是某种维度调整和张量收缩的组合，偶尔加上一个（通常是逐点的）非线性函数。这意味着使用 einsum 记号可以让你的大量代码更具可读性和灵活性。</p>
+<p>我们强烈建议你学习并在本课程中使用 einsum 记号。以前没接触过 einsum 记号的同学应该使用 einops（文档见此处），而已经熟悉 einops 的同学应该学习更通用的 einx（见此处）。⁴ 这两个包都已经安装在我们提供的环境中。</p>
+<div class="footnote">⁴ 值得注意的是，虽然 einops 有大量支持，但 einx 还没有那么久经考验。如果你发现 einx 有任何限制或 bug，可以放心地回退到使用 einops 加一些更普通的 PyTorch。</div>
+<p>下面我们给出一些 einsum 记号的使用示例。这些是对 einops 文档的补充，你应该先阅读 einops 文档。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>einstein_example1</code>）：使用 einops.einsum 做批量矩阵乘法</strong></div>
+<pre class="codeblock"><code><span style="color: #D73948">import</span> <span style="color: #000">torch</span>
+
+<span style="color: #D73948">from</span> <span style="color: #000">einops</span> <span style="color: #D73948">import</span> rearrange<span style="color: #000">,</span> einsum
+
+<span style="color: #74747C; font-style: italic">## 基础实现</span>
+Y <span style="color: #D73948">=</span> D <span style="color: #D73948">@</span> A<span style="color: #D73948">.</span>T
+
+<span style="color: #74747C; font-style: italic"># 很难看出输入和输出的形状以及它们的含义。</span>
+<span style="color: #74747C; font-style: italic"># D 和 A 可以有什么形状？其中哪些会有意外的行为？</span>
+
+<span style="color: #74747C; font-style: italic">## Einsum 是自文档化的、健壮的</span>
+<span style="color: #74747C; font-style: italic"># D A -&gt; Y</span>
+Y <span style="color: #D73948">=</span> einsum<span style="color: #000">(</span>D<span style="color: #000">,</span> A<span style="color: #000">,</span> <span style="color: #198810">"batch sequence d_in, d_out d_in -&gt; batch sequence d_out"</span><span style="color: #000">)</span>
+
+<span style="color: #74747C; font-style: italic">## 或者，一个批处理版本，其中 D 可以有任意前导维度，但 A 是受限的。</span>
+Y <span style="color: #D73948">=</span> einsum<span style="color: #000">(</span>D<span style="color: #000">,</span> A<span style="color: #000">,</span> <span style="color: #198810">"... d_in, d_out d_in -&gt; ... d_out"</span><span style="color: #000">)</span>
+</code></pre>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>einstein_example2</code>）：使用 einops.rearrange 做广播运算</strong></div>
+<p>我们有一批图像，对于每张图像，我们要根据某个缩放因子生成 10 个变暗版本：</p>
+<pre class="codeblock"><code>images <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>randn<span style="color: #000">(</span><span style="color: #B60157">64</span><span style="color: #000">,</span> <span style="color: #B60157">128</span><span style="color: #000">,</span> <span style="color: #B60157">128</span><span style="color: #000">,</span> <span style="color: #B60157">3</span><span style="color: #000">)</span>  <span style="color: #74747C; font-style: italic"># (batch, height, width, channel)</span>
+dim_by <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>linspace<span style="color: #000">(</span>start<span style="color: #D73948">=</span><span style="color: #B60157">0.0</span><span style="color: #000">,</span> end<span style="color: #D73948">=</span><span style="color: #B60157">1.0</span><span style="color: #000">,</span> steps<span style="color: #D73948">=</span><span style="color: #B60157">10</span><span style="color: #000">)</span>
+
+<span style="color: #74747C; font-style: italic">## 重塑并相乘</span>
+dim_value <span style="color: #D73948">=</span> rearrange<span style="color: #000">(</span>dim_by<span style="color: #000">,</span>  <span style="color: #198810">"dim_value    -&gt; 1 dim_value 1 1 1"</span><span style="color: #000">)</span>
+images_rearr <span style="color: #D73948">=</span> rearrange<span style="color: #000">(</span>images<span style="color: #000">,</span>  <span style="color: #198810">"b height width channel -&gt; b 1 height width channel"</span><span style="color: #000">)</span>
+dimmed_images <span style="color: #D73948">=</span> images_rearr <span style="color: #D73948">*</span> dim_value
+
+<span style="color: #74747C; font-style: italic">## 或者一步到位：</span>
+dimmed_images <span style="color: #D73948">=</span> einsum<span style="color: #000">(</span>
+    images<span style="color: #000">,</span> dim_by<span style="color: #000">,</span>
+    <span style="color: #198810">"batch height width channel, dim_value -&gt; batch dim_value height width channel"</span>
+<span style="color: #000">)</span>
+</code></pre>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>einstein_example3</code>）：使用 einops.rearrange 做像素混合</strong></div>
+<p>假设我们有一批图像，表示为一个形状为 (batch, height, width, channel) 的张量，我们想对图像的所有像素执行线性变换，但该变换应对每个通道独立进行。我们的线性变换表示为一个形状为 (height * width, height * width) 的矩阵 B。</p>
+<pre class="codeblock"><code>channels_last <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>randn<span style="color: #000">(</span><span style="color: #B60157">64</span><span style="color: #000">,</span> <span style="color: #B60157">32</span><span style="color: #000">,</span> <span style="color: #B60157">32</span><span style="color: #000">,</span> <span style="color: #B60157">3</span><span style="color: #000">)</span>  <span style="color: #74747C; font-style: italic"># (batch, height, width, channel)</span>
+B <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>randn<span style="color: #000">(</span><span style="color: #B60157">32</span><span style="color: #D73948">*</span><span style="color: #B60157">32</span><span style="color: #000">,</span> <span style="color: #B60157">32</span><span style="color: #D73948">*</span><span style="color: #B60157">32</span><span style="color: #000">)</span>
+
+<span style="color: #74747C; font-style: italic">## 重排图像张量以在所有像素上混合</span>
+channels_last_flat <span style="color: #D73948">=</span> channels_last<span style="color: #D73948">.</span>view<span style="color: #000">(</span><span style="color: #D73948">-</span><span style="color: #B60157">1</span><span style="color: #000">,</span> channels_last<span style="color: #D73948">.</span>size<span style="color: #000">(</span><span style="color: #B60157">1</span><span style="color: #000">)</span> <span style="color: #D73948">*</span> channels_last<span style="color: #D73948">.</span>size<span style="color: #000">(</span><span style="color: #B60157">2</span><span style="color: #000">),</span> channels_last<span style="color: #D73948">.</span>size<span style="color: #000">(</span><span style="color: #B60157">3</span><span style="color: #000">))</span>
+channels_first_flat <span style="color: #D73948">=</span> channels_last_flat<span style="color: #D73948">.</span>transpose<span style="color: #000">(</span><span style="color: #B60157">1</span><span style="color: #000">,</span> <span style="color: #B60157">2</span><span style="color: #000">)</span>
+channels_first_flat_transformed <span style="color: #D73948">=</span> channels_first_flat <span style="color: #D73948">@</span> B<span style="color: #D73948">.</span>T
+channels_last_flat_transformed <span style="color: #D73948">=</span> channels_first_flat_transformed<span style="color: #D73948">.</span>transpose<span style="color: #000">(</span><span style="color: #B60157">1</span><span style="color: #000">,</span> <span style="color: #B60157">2</span><span style="color: #000">)</span>
+channels_last_transformed <span style="color: #D73948">=</span> channels_last_flat_transformed<span style="color: #D73948">.</span>view<span style="color: #000">(</span><span style="color: #D73948">*</span>channels_last<span style="color: #D73948">.</span>shape<span style="color: #000">)</span>
+</code></pre>
+<p>改用 einops：</p>
+<pre class="codeblock"><code>height <span style="color: #D73948">=</span> width <span style="color: #D73948">=</span> <span style="color: #B60157">32</span>
+<span style="color: #74747C; font-style: italic">## rearrange 取代了笨拙的 torch view + transpose</span>
+channels_first <span style="color: #D73948">=</span> rearrange<span style="color: #000">(</span>channels_last<span style="color: #000">,</span>
+                                   <span style="color: #198810">"batch height width channel -&gt; batch channel (height width)"</span><span style="color: #000">)</span>
+channels_first_transformed <span style="color: #D73948">=</span> einsum<span style="color: #000">(</span>channels_first<span style="color: #000">,</span> B<span style="color: #000">,</span>
+                                   <span style="color: #198810">"batch channel pixel_in, pixel_out pixel_in -&gt; batch channel pixel_out"</span><span style="color: #000">)</span>
+channels_last_transformed <span style="color: #D73948">=</span> rearrange<span style="color: #000">(</span>channels_first_transformed<span style="color: #000">,</span>
+                                   <span style="color: #198810">"batch channel (height width) -&gt; batch height width channel"</span><span style="color: #000">,</span>
+                                   height<span style="color: #D73948">=</span>height<span style="color: #000">,</span> width<span style="color: #D73948">=</span>width<span style="color: #000">)</span>
+</code></pre>
+<p>或者，如果你想来点疯狂的：用 einx.dot（einx 中相当于 einops.einsum 的东西）一步到位：</p>
+<pre class="codeblock"><code>height <span style="color: #D73948">=</span> width <span style="color: #D73948">=</span> <span style="color: #B60157">32</span>
+channels_last_transformed <span style="color: #D73948">=</span> einx<span style="color: #D73948">.</span>dot<span style="color: #000">(</span>
+                                   <span style="color: #198810">"batch row_in col_in channel, (row_out col_out) (row_in col_in) -&gt; batch row_out col_out channel"</span><span style="color: #000">,</span>
+                                   channels_last<span style="color: #000">,</span> B<span style="color: #000">,</span>
+                                   col_in<span style="color: #D73948">=</span>width<span style="color: #000">,</span> col_out<span style="color: #D73948">=</span>width<span style="color: #000">)</span>
+</code></pre>
+<p>上面的第一种实现可以通过在前后放置注释来标明输入和输出的形状，但这样做笨拙且容易出错。使用 einsum 记号，文档本身就是实现！</p>
+<p>Einsum 记号可以处理任意的输入批处理维度，同时还有一个关键好处——自文档化。在使用 einsum 记号的代码中，输入和输出张量的相关形状要清晰得多。对于其余张量，你可以考虑使用 Tensor 类型提示，例如使用 jaxtyping 库（并非 JAX 专用）。</p>
+<p>我们将在作业 2 中更多地讨论使用 einsum 记号的性能影响，但现在你只需知道，它们几乎总是优于其他替代方案！</p>
+</div>
+<h4 id="3-2-1">3.2.1 数学记号与内存顺序</h4>
+<p>许多机器学习论文在记号中使用行向量，这样得到的表示与 NumPy 和 PyTorch 默认使用的行主序（row-major）内存顺序契合得很好。使用行向量时，线性变换看起来像</p>
+<div class="math-display">$$ \boldsymbol{y}=\boldsymbol{x}\boldsymbol{W}^\top, $$</div>
+<p>其中 <span class="math-inline">$W \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$</span> 为行主序，<span class="math-inline">$x \in \mathbb{R}^{1 \times d_{\text{in}}}$</span> 为行向量。注意，这让我们可以通过增大 <span class="math-inline">$x$</span> 的最外层维度来批处理输入，也就是说我们可以把向量输入 <span class="math-inline">$x$</span> 替换为矩阵输入 <span class="math-inline">$X \in \mathbb{R}^{\text{batch} \times d_{\text{in}}}$</span>。在线性代数中，更常见的是使用列向量，此时线性变换看起来像</p>
+<div class="math-display">$$ y=W x, $$</div>
+<p>给定行主序的 <span class="math-inline">$W \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$</span> 和列向量 <span class="math-inline">$x \in \mathbb{R}^{d_{\text{in}}}$</span>。在这种设定下要批处理输入，<span class="math-inline">$x$</span> 的批处理维度必须放在最后，因此 <span class="math-inline">$x$</span> 需要被替换为一个矩阵 <span class="math-inline">$\tilde{X} \in \mathbb{R}^{d_{\text{in}} \times \text{batch}}$</span>。</p>
+<p>本作业的数学记号将主要使用列向量，因为数学通常遵循这种记号。你应当记住：如果你想使用普通的矩阵乘法记号，就必须像公式 1 中行向量约定那样对矩阵做转置后再应用，因为 PyTorch 使用行主序内存顺序。如果你用 einsum 来做线性代数运算，那么只要你正确标注了轴，这就不成问题。顺带一提，值得注意 Matlab、Julia 和 Fortran 等其他语言/线性代数包都使用列主序（column-major）内存顺序，这意味着批处理维度放在最后，但 Python 及相关包采用了 C 标准的行主序。</p>
+<h3 id="3-3">3.3 基本构建块：Linear 与 Embedding 模块</h3>
+<h4 id="3-3-1">3.3.1 参数初始化</h4>
+<p>有效训练神经网络通常需要仔细初始化模型参数——糟糕的初始化会导致诸如梯度消失或梯度爆炸等不良行为。Pre-norm Transformer 对初始化异常鲁棒，但初始化仍可能对训练速度和收敛产生显著影响。由于本作业已经很长，我们把细节留到作业 3，这里先给你一些在大多数情况下应该有效的近似初始化方案。现在，使用：</p>
+<ul><li>Linear 权重：<span class="math-inline">$\mathcal{N}\left(\mu=0, \sigma^{2}=\frac{2}{d_{\mathrm{in}}+d_{\mathrm{out}}}\right)$</span>，在 <span class="math-inline">$[-3\sigma, 3\sigma]$</span> 处截断。</li><li>Embedding：<span class="math-inline">$\mathcal{N}(\mu = 0, \sigma^2 = 1)$</span>，在 <span class="math-inline">$[-3, 3]$</span> 处截断。</li><li>RMSNorm：1</li></ul>
+<p>你应该使用 torch.nn.init.trunc_normal_ 来初始化截断正态权重。</p>
+<h4 id="3-3-2">3.3.2 Linear 模块</h4>
+<p>Linear 层是 Transformer 以及一般神经网络的基本构建块。首先，你将实现自己的 Linear 类，它继承自 torch.nn.Module 并执行线性变换：</p>
+<div class="math-display">$$ y=W x. $$</div>
+<p>注意，遵循大多数现代 LLM 的做法，我们不包含偏置项。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>linear</code>）：实现 linear 模块（1 分）</strong></div>
+<p>提交内容：实现一个继承自 torch.nn.Module 并执行线性变换的 Linear 类。你的实现应遵循 PyTorch 内置 nn.Linear 模块的接口，只是没有 bias 参数。我们推荐以下接口：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> in_features<span style="color: #000">,</span> out_features<span style="color: #000">,</span> device<span style="color: #D73948">=None</span><span style="color: #000">,</span> dtype<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    构造一个线性变换模块。该函数应接受以下参数：
+    in_features<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 输入的最后一维
+    out_features<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 输出的最后一维
+    device<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>device <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 存储参数的设备
+    dtype<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>dtype <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 参数的数据类型
+
+<span style="color: #D73948">def</span> <span style="color: #000">forward(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> x<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>Tensor<span style="color: #000">)</span> <span style="color: #D73948">-&gt;</span> torch<span style="color: #D73948">.</span>Tensor
+    对输入应用线性变换。
+</code></pre>
+<p>务必做到：</p>
+<ul><li>继承 nn.Module</li><li>调用父类构造函数</li><li>将你的参数构造并存储为 <span class="math-inline">$W$</span>（而非 <span class="math-inline">$W^{\top}$</span>），放入 nn.Parameter 中</li><li>当然，不要使用 nn.Linear 或 nn.functional.linear</li></ul>
+<p>对于初始化，使用上面的设置，并用 torch.nn.init.trunc_normal_ 来初始化权重。</p>
+<p>要测试你的 Linear 模块，实现 [adapters.run_linear] 处的测试适配器。该适配器应把给定的权重加载进你的 Linear 模块。你可以用 Module.load_state_dict 来做这件事。然后运行 uv run pytest -k test_linear。</p>
+</div>
+<h4 id="3-3-3">3.3.3 Embedding 模块</h4>
+<p>如上所述，Transformer 的第一层是一个嵌入层，它将整数 token ID 映射到维度为 d_model 的向量空间。我们将实现一个自定义的 Embedding 类，它继承自 torch.nn.Module（因此你不应使用 nn.Embedding）。forward 方法应通过用形状为 (batch_size, sequence_length) 的 torch.LongTensor token ID 对形状为 (vocab_size, d_model) 的嵌入矩阵进行索引，为每个 token ID 选出对应的嵌入向量。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>embedding</code>）：实现 embedding 模块（1 分）</strong></div>
+<p>提交内容：实现继承自 torch.nn.Module 并执行嵌入查找的 Embedding 类。你的实现应遵循 PyTorch 内置 nn.Embedding 模块的接口。我们推荐以下接口：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> num_embeddings<span style="color: #000">,</span> embedding_dim<span style="color: #000">,</span> device<span style="color: #D73948">=None</span><span style="color: #000">,</span> dtype<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    构造一个嵌入模块。该函数应接受以下参数：
+    num_embeddings<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 词汇表大小
+    embedding_dim<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 嵌入向量的维度，即 d_model
+    device<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>device <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 存储参数的设备
+    dtype<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>dtype <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 参数的数据类型
+
+<span style="color: #D73948">def</span> <span style="color: #000">forward(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> token_ids<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>Tensor<span style="color: #000">)</span> <span style="color: #D73948">-&gt;</span> torch<span style="color: #D73948">.</span>Tensor
+    为给定的 token ID 查找嵌入向量。
+</code></pre>
+<p>务必做到：</p>
+<ul><li>继承 nn.Module</li><li>调用父类构造函数</li><li>将你的嵌入矩阵初始化为一个 nn.Parameter</li><li>存储嵌入矩阵时使 d_model 作为最后一维</li><li>当然，不要使用 nn.Embedding 或 nn.functional.embedding</li></ul>
+<p>同样，使用上面的设置进行初始化，并用 torch.nn.init.trunc_normal_ 初始化权重。</p>
+<p>要测试你的实现，实现 [adapters.run_embedding] 处的测试适配器。然后运行 uv run pytest -k test_embedding。</p>
+</div>
+<h3 id="3-4">3.4 Pre-Norm Transformer 块</h3>
+<p>每个 Transformer 块有两个子层：一个多头自注意力机制和一个按位置的前馈网络（[A. Vaswani et al., 2017]，第 3.1 节）。</p>
+<p>在原始 Transformer 论文中，模型在两个子层的每一个周围使用残差连接，随后进行层归一化。这种架构通常被称为「post-norm」Transformer，因为层归一化应用于子层输出。然而，大量工作发现，将层归一化从每个子层的输出移到每个子层的输入（并在最后一个 Transformer 块之后额外做一次层归一化）可以提高 Transformer 训练稳定性 [T. Q. Nguyen et al., 2019; R. Xiong et al., 2020]——见「pre-norm」Transformer 块的可视化表示图 2。每个 Transformer 块子层的输出随后通过残差连接加到子层输入上（A. Vaswani et al. [8]，第 5.4 节）。对 pre-norm 的一种直觉理解是：从输入嵌入到 Transformer 最终输出之间存在一条没有任何归一化的干净「残差流」，据称这能改善梯度流动。这种 pre-norm Transformer 如今已成为语言模型的标准（例如 GPT-3、LLaMA、PaLM 等），因此我们将实现这一变体。我们将逐一讲解 pre-norm Transformer 块的各个组件，并按顺序实现它们。</p>
+<h4 id="3-4-1">3.4.1 Root Mean Square 层归一化</h4>
+<p>A. Vaswani et al. [8] 的原始 Transformer 实现使用层归一化 [J. L. Ba et al., 2016] 来归一化激活值。遵循 H. Touvron et al. [12]，我们将使用 root mean square 层归一化（RMSNorm；B. Zhang et al. [13]，公式 4）来进行层归一化。给定一个激活向量 <span class="math-inline">$a \in \mathbb{R}^{d_{\text{model}}}$</span>，RMSNorm 将按如下方式重新缩放每个激活值 <span class="math-inline">$a_i$</span>：</p>
+<div class="math-display">$$ \mathrm{RMSNorm}(a_i) = \frac{a_i}{\mathrm{RMS}(a)} g_i, $$</div>
+<p>其中 <span class="math-inline">$\mathrm{RMS}(a) = \sqrt{\frac{1}{d_{\mathrm{model}}} \sum_{i=1}^{d_{\mathrm{model}}} a_i^2 + \varepsilon}$</span>。这里，<span class="math-inline">$g_i$</span> 是一个可学习的「增益」（gain）参数（总共有 <span class="math-inline">$d_{model}$</span> 个这样的参数），<span class="math-inline">$\varepsilon$</span> 是一个通常固定为 <span class="math-inline">$1e-5$</span> 的超参数。</p>
+<p>你应该将输入上转型为 torch.float32，以防止对输入求平方时溢出。总的来说，你的 forward 方法应类似这样：</p>
+<pre class="codeblock"><code>in_dtype <span style="color: #D73948">=</span> x<span style="color: #D73948">.</span>dtype
+x <span style="color: #D73948">=</span> x<span style="color: #D73948">.</span>to<span style="color: #000">(</span>torch<span style="color: #D73948">.</span>float32<span style="color: #000">)</span>
+
+<span style="color: #74747C; font-style: italic"># 在这里编写执行 RMSNorm 的代码</span>
+<span style="color: #D73948">...</span>
+result <span style="color: #D73948">=</span> <span style="color: #D73948">...</span>
+
+<span style="color: #74747C; font-style: italic"># 以原始 dtype 返回结果</span>
+<span style="color: #D73948">return</span> result<span style="color: #D73948">.</span>to<span style="color: #000">(</span>in_dtype<span style="color: #000">)</span>
+</code></pre>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>rmsnorm</code>）：Root Mean Square 层归一化（1 分）</strong></div>
+<p>提交内容：将 RMSNorm 实现为一个 torch.nn.Module。我们推荐以下接口：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> d_model<span style="color: #000">:</span> <span style="color: #4B69C6">int</span><span style="color: #000">,</span> eps<span style="color: #000">:</span> <span style="color: #4B69C6">float</span> <span style="color: #D73948">=</span> <span style="color: #B60157">1e-5</span><span style="color: #000">,</span> device<span style="color: #D73948">=None</span><span style="color: #000">,</span> dtype<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    构造 RMSNorm 模块。该函数应接受以下参数：
+    d_model<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 模型的隐藏维度
+    eps<span style="color: #000">:</span> <span style="color: #4B69C6">float</span> <span style="color: #D73948">=</span> <span style="color: #B60157">1e-5</span> —— 用于数值稳定性的 epsilon 值
+    device<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>device <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 存储参数的设备
+    dtype<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>dtype <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 参数的数据类型
+
+<span style="color: #D73948">def</span> <span style="color: #000">forward(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> x<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>Tensor<span style="color: #000">)</span> <span style="color: #D73948">-&gt;</span> torch<span style="color: #D73948">.</span>Tensor
+    处理形状为 <span style="color: #000">(</span>batch_size<span style="color: #000">,</span> sequence_length<span style="color: #000">,</span> d_model<span style="color: #000">)</span> 的输入张量，并返回相同形状的张量。
+</code></pre>
+<p>注意：如上所述，记得在执行归一化之前将输入上转型为 torch.float32（之后再降回原始 dtype）。</p>
+<p>要测试你的实现，实现 [adapters.run_rmsnorm] 处的测试适配器。然后运行 uv run pytest -k test_rmsnorm。</p>
+</div>
+<h4 id="3-4-2">3.4.2 按位置的前馈网络（Position-Wise Feed-Forward Network）</h4>
+<figure class="figure"><img src="figure3.png" alt="图 3"><figcaption>图 3：比较 SiLU（又称 Swish）与 ReLU 激活函数</figcaption></figure>
+<p>在原始 Transformer 论文（A. Vaswani et al. [8] 第 3.3 节）中，Transformer 前馈网络由两个线性变换组成，中间有一个 ReLU 激活（<span class="math-inline">$\mathrm{ReLU}(x) = \max(0, x)$</span>）。在该原始架构中，内层前馈层的维度通常是输入维度的 4 倍。</p>
+<p>然而，现代语言模型相比于这个原始设计倾向于引入两个主要变化：它们使用另一种激活函数，并采用一种门控机制。具体来说，我们将实现 Llama 3 [A. Grattafiori et al., 2024] 和 Qwen 2.5 [A. Yang et al., 2024] 等 LLM 采用的「SwiGLU」激活函数，它把 SiLU（常被称为 Swish）激活与一种称为门控线性单元（Gated Linear Unit，GLU）的门控机制结合起来。我们也将省略线性层中有时使用的偏置项，遵循自 PaLM [A. Chowdhery et al., 2022] 和 LLaMA [H. Touvron et al., 2023] 以来大多数现代 LLM 的做法。</p>
+<p>SiLU 或 Swish 激活函数 [D. Hendrycks et al., 2016; S. Elfwing et al., 2017] 定义如下：</p>
+<div class="math-display">$$ \mathrm{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}} $$</div>
+<p>如图 3 所示，SiLU 激活函数与 ReLU 激活函数相似，但在零点处是平滑的。</p>
+<p>门控线性单元（GLU）最初由 Y. N. Dauphin et al. [19] 定义为一个经过 sigmoid 函数的线性变换与另一个线性变换的逐元素乘积：</p>
+<div class="math-display">$$ \mathrm{GLU}(x, W_1, W_2) = \sigma(W_1 x) \odot W_2 x, $$</div>
+<p>其中 <span class="math-inline">$\odot$</span> 表示逐元素乘法。门控线性单元被认为能够「通过为梯度提供线性路径、同时保留非线性能力，来缓解深层架构的梯度消失问题」。</p>
+<p>将 SiLU/Swish 与 GLU 结合，我们得到 SwiGLU，它将用于我们的前馈网络：</p>
+<div class="math-display">$$ \mathrm{FFN}(x) = \mathrm{SwiGLU}(x, W_1, W_2, W_3) = W_2(\mathrm{SiLU}(W_1 x) \odot W_3 x), $$</div>
+<p>其中 <span class="math-inline">$x \in \mathbb{R}^{d_{\text{model}}}$</span>，<span class="math-inline">$W_1, W_3 \in \mathbb{R}^{d_{\text{ff}} \times d_{\text{model}}}$</span>，<span class="math-inline">$W_2 \in \mathbb{R}^{d_{\text{model}} \times d_{\text{ff}}}$</span>，且按惯例 <span class="math-inline">$d_{\text{ff}} = \frac{8}{3} d_{\text{model}}$</span>。对于具体实现，为了硬件效率可以将其四舍五入到接近 64 的倍数。</p>
+<p>N. Shazeer [20] 首先提出将 SiLU/Swish 激活与 GLU 结合，并进行了实验，表明 SwiGLU 在语言建模任务上优于 ReLU 和（无门控的）SiLU 等基线。稍后在本作业中，你将比较 SwiGLU 和 SiLU。尽管我们提到了这些组件的一些启发式论证（论文也提供了更多支持性证据），但保持经验主义的视角是好的：Shazeer 论文中有一句如今很出名的话是</p>
+<p>「我们无法解释这些架构为何似乎有效；我们将其成功，如同其他一切一样，归因于神的仁慈。」</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>positionwise_feedforward</code>）：实现按位置的前馈网络（2 分）</strong></div>
+<p>提交内容：实现由 SiLU 激活函数和 GLU 组成的 SwiGLU 前馈网络。</p>
+<p>注意：在这个特定情况下，为了数值稳定性，你可以放心使用 torch.sigmoid。</p>
+<p>在你的实现中，应将 <span class="math-inline">$d_{ff}$</span> 设为大约 <span class="math-inline">$\frac{8}{3} \times d_{model}$</span>，同时确保内层前馈层的维度是 64 的倍数，以充分利用你的硬件。要针对我们提供的测试来测试你的实现，你需要实现 [adapters.run_swiglu] 处的测试适配器。然后运行 uv run pytest -k test_swiglu 来测试你的实现。</p>
+</div>
+<h4 id="3-4-3">3.4.3 相对位置嵌入</h4>
+<p>为了向模型注入位置信息，我们将实现旋转位置嵌入（Rotary Position Embeddings，[J. Su et al., 2021]），通常称为 RoPE。对于 token 位置 <span class="math-inline">$i$</span> 处的给定 query token <span class="math-inline">$q^{(i)} = W_q x^{(i)} \in \mathbb{R}^d$</span>，我们将应用一个成对的旋转矩阵 <span class="math-inline">$R^i$</span>，得到 <span class="math-inline">$q'^{(i)} = R^i q^{(i)} = R^i W_q x^{(i)}$</span>。这里，<span class="math-inline">$R^i$</span> 将把嵌入元素对 <span class="math-inline">$q^{(i)}_{2k-1:2k}$</span> 作为二维向量旋转角度 <span class="math-inline">$\theta_{i,k} = \frac{i}{\Theta^{(2k-2)/d}}$</span>，其中 <span class="math-inline">$k \in \{1, ..., d/2\}$</span>，<span class="math-inline">$\Theta$</span> 为某个常数。因此，我们可以把 <span class="math-inline">$R^i$</span> 视为一个大小为 <span class="math-inline">$d \times d$</span> 的分块对角矩阵，块为 <span class="math-inline">$R_k^i$</span>（<span class="math-inline">$k \in \{1, ..., \frac{d}{2}\}$</span>），其中</p>
+<div class="math-display">$$ R_k^i = \begin{pmatrix} \cos(\theta_{i,k}) & -\sin(\theta_{i,k}) \\ \sin(\theta_{i,k}) & \cos(\theta_{i,k}) \end{pmatrix} $$</div>
+<p>于是我们得到完整的旋转矩阵</p>
+<div class="math-display">$$ R^i = \begin{pmatrix} R_1^i & 0 & 0 & \cdots & 0 \\ 0 & R_2^i & 0 & \cdots & 0 \\ 0 & 0 & R_3^i & \cdots & 0 \\ \vdots & \vdots & \vdots & \ddots & \vdots \\ 0 & 0 & 0 & \cdots & R_{d/2}^i \end{pmatrix}, $$</div>
+<p>其中 0 表示 <span class="math-inline">$2 \times 2$</span> 的零矩阵。虽然可以构造完整的 <span class="math-inline">$d \times d$</span> 矩阵，但一个好的解决方案应当利用该矩阵的性质来更高效地实现这个变换。由于我们只关心给定序列内 token 之间的相对旋转，我们可以跨层、跨不同批重用我们为 <span class="math-inline">$\cos(\theta_{i,k})$</span> 和 <span class="math-inline">$\sin(\theta_{i,k})$</span> 计算的值。如果你想优化，可以让所有层引用同一个 RoPE 模块，并在 init 期间用 self.register_buffer(persistent=False) 创建一个预计算的 sin 和 cos 值的二维缓冲区，而不是用 nn.Parameter（因为我们不想学习这些固定的余弦和正弦值）。我们对 <span class="math-inline">$q^{(i)}$</span> 所做的完全相同的旋转过程随后也用于 <span class="math-inline">$k^{(j)}$</span>，用相应的 <span class="math-inline">$R^j$</span> 进行旋转。注意，这一层没有可学习参数。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>rope</code>）：实现 RoPE（2 分）</strong></div>
+<p>提交内容：实现一个类 RotaryPositionalEmbedding，对输入张量应用 RoPE。</p>
+<p>推荐以下接口：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> theta<span style="color: #000">:</span> <span style="color: #4B69C6">float</span><span style="color: #000">,</span> d_k<span style="color: #000">:</span> <span style="color: #4B69C6">int</span><span style="color: #000">,</span> max_seq_len<span style="color: #000">:</span> <span style="color: #4B69C6">int</span><span style="color: #000">,</span> device<span style="color: #D73948">=None</span><span style="color: #000">)</span>
+    构造 RoPE 模块，并在需要时创建缓冲区。
+    theta<span style="color: #000">:</span> <span style="color: #4B69C6">float</span> —— RoPE 的 Θ 值
+    d_k<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— query 和 key 向量的维度
+    max_seq_len<span style="color: #000">:</span> <span style="color: #4B69C6">int</span> —— 将输入的最大序列长度
+    device<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>device <span style="color: #D73948">|</span> <span style="color: #D73948">None</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> —— 存储缓冲区的设备
+
+<span style="color: #D73948">def</span> <span style="color: #000">forward(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> x<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>Tensor<span style="color: #000">,</span> token_positions<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>Tensor<span style="color: #000">)</span> <span style="color: #D73948">-&gt;</span> torch<span style="color: #D73948">.</span>Tensor
+    处理形状为 <span style="color: #000">(</span><span style="color: #D73948">...</span><span style="color: #000">,</span> seq_len<span style="color: #000">,</span> d_k<span style="color: #000">)</span> 的输入张量，并返回相同形状的张量。注意，你应容忍 x 带有任意数量的批处理维度。你应假设 token 位置是一个形状为 <span style="color: #000">(</span><span style="color: #D73948">...</span><span style="color: #000">,</span> seq_len<span style="color: #000">)</span> 的张量，指定 x 沿序列维度的 token 位置。
+</code></pre>
+<p>你应该使用 token 位置来沿序列维度切片你的（可能预计算的）cos 和 sin 张量。</p>
+<p>要测试你的实现，完成 [adapters.run_rope]，并确保它能通过 uv run pytest -k test_rope。</p>
+</div>
+<h4 id="3-4-4">3.4.4 缩放点积注意力</h4>
+<p>现在我们将实现 A. Vaswani et al. [8]（第 3.2.1 节）中描述的缩放点积注意力（scaled dot-product attention）。作为预备步骤，Attention 运算的定义会用到 softmax，这是一个将一个未归一化的分数向量转换为归一化分布的运算：</p>
+<div class="math-display">$$ \mathrm{softmax}(v)_i = \frac{\exp(v_i)}{\sum_{j=1}^{n} \exp(v_j)}. $$</div>
+<p>注意，当 <span class="math-inline">$v_i$</span> 很大时 <span class="math-inline">$\exp(v_i)$</span> 可能变成 <span class="math-inline">$\inf$</span>（此时 <span class="math-inline">$\frac{\inf}{\inf} = \mathrm{NaN}$</span>）。我们可以通过注意到 softmax 运算对给所有输入加上任意常数 <span class="math-inline">$c$</span> 是不变的，来避免这一点。我们可以利用这一性质来保证数值稳定性——通常，我们从 <span class="math-inline">$v$</span> 的所有元素中减去 <span class="math-inline">$v$</span> 的最大元素，使新的最大元素变为 0。你现在将使用这个技巧来实现 softmax，以保证数值稳定性。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>softmax</code>）：实现 softmax（1 分）</strong></div>
+<p>提交内容：编写一个函数，对张量应用 softmax 运算。你的函数应接受两个参数：一个张量和一个维度 i，并对输入张量的第 i 维应用 softmax。输出张量应与输入张量具有相同的形状，但其第 i 维现在是一个归一化的概率分布。使用「从第 i 维的所有元素中减去第 i 维的最大值」的技巧来避免数值稳定性问题。</p>
+<p>要测试你的实现，完成 [adapters.run_softmax]，并确保它能通过 uv run pytest -k test_softmax_matches_pytorch。</p>
+<p>现在我们可以如下用数学方式定义 Attention 运算：</p>
+<div class="math-display">$$ \mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$</div>
+<p>其中 <span class="math-inline">$Q \in \mathbb{R}^{n \times d_k}$</span>，<span class="math-inline">$K \in \mathbb{R}^{m \times d_k}$</span>，<span class="math-inline">$V \in \mathbb{R}^{m \times d_v}$</span>。这里，<span class="math-inline">$Q$</span>、<span class="math-inline">$K$</span> 和 <span class="math-inline">$V$</span> 都是该运算的输入——注意这些不是可学习参数。</p>
+<p>掩码（Masking）：有时对注意力运算的输出进行掩码会很方便。掩码应具有形状 <span class="math-inline">$M \in \{\text{True}, \text{False}\}^{n \times m}$</span>，这个布尔矩阵的每一行 <span class="math-inline">$i$</span> 表示 query <span class="math-inline">$i$</span> 应关注哪些 key。按惯例（并且略有些令人困惑），位置 <span class="math-inline">$(i,j)$</span> 处的值为 <span class="math-inline">$\text{True}$</span> 表示 query <span class="math-inline">$i$</span> 确实关注 key <span class="math-inline">$j$</span>，值为 <span class="math-inline">$\text{False}$</span> 表示该 query 不关注该 key。换句话说，在值为 <span class="math-inline">$\text{True}$</span> 的 <span class="math-inline">$(i,j)$</span> 对上「信息会流动」。例如，考虑一个条目为 <span class="math-inline">$[[\text{True}, \text{True}, \text{False}]]$</span> 的 <span class="math-inline">$1 \times 3$</span> 掩码矩阵。这单个 query 向量只关注前两个 key。</p>
+<p>从计算上讲，使用掩码比在子序列上计算注意力要高效得多，我们可以通过取 softmax 之前的值 <span class="math-inline">$(QK^{\top}/\sqrt{d_k})$</span>，并在掩码矩阵中为 <span class="math-inline">$\text{False}$</span> 的任何条目上加上 <span class="math-inline">$-\infty$</span> 来实现这一点。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>scaled_dot_product_attention</code>）：实现缩放点积注意力（5 分）</strong></div>
+<p>提交内容：实现缩放点积注意力函数。你的实现应处理形状为 (batch_size, ..., seq_len, d_k) 的 key 和 query，以及形状为 (batch_size, ..., seq_len, d_v) 的 value，其中 ... 表示任意数量的其他批处理式维度（如果提供的话）。实现应返回形状为 (batch_size, ..., seq_len, d_v) 的输出。关于批处理式维度的讨论见第 3.2 节。</p>
+<p>你的实现还应支持可选的用户提供的形状为 (seq_len, seq_len) 的布尔掩码。掩码值为 True 的位置的注意力概率之和应为 1，掩码值为 False 的位置的注意力概率应为零。</p>
+<p>要针对我们提供的测试来测试你的实现，你需要实现 [adapters.run_scaled_dot_product_attention] 处的测试适配器。uv run pytest -k test_scaled_dot_product_attention 会在三阶输入张量上测试你的实现，而 uv run pytest -k test_4d_scaled_dot_product_attention 会在四阶输入张量上测试你的实现。</p>
+</div>
+<h4 id="3-4-5">3.4.5 因果多头自注意力</h4>
+<p>我们将实现 A. Vaswani et al. [8] 第 3.2.2 节中描述的多头自注意力。回顾一下，从数学上讲，应用多头注意力的运算定义如下：</p>
+<div class="math-display">$$ \mathrm{MultiHead}(Q, K, V) = \mathrm{Concat}(\mathrm{head}_1, ..., \mathrm{head}_h) $$</div>
+<p>其中 <span class="math-inline">$\mathrm{head}_i = \mathrm{Attention}(Q_i, K_i, V_i)$</span>，</p>
+<p><span class="math-inline">$Q_i$</span>、<span class="math-inline">$K_i$</span>、<span class="math-inline">$V_i$</span> 分别是 <span class="math-inline">$Q$</span>、<span class="math-inline">$K$</span>、<span class="math-inline">$V$</span> 的嵌入维度上大小为 <span class="math-inline">$d_k$</span> 或 <span class="math-inline">$d_v$</span> 的第 <span class="math-inline">$i \in \{1, ..., h\}$</span> 个切片。Attention 是第 3.4.4 节中定义的缩放点积注意力运算。由此我们可以形成多头自注意力运算：</p>
+<div class="math-display">$$ \mathrm{MultiHeadSelfAttention}(x) = W_O \mathrm{MultiHead}(W_Q x, W_K x, W_V x) $$</div>
+<p>这里，可学习参数是 <span class="math-inline">$W_Q \in \mathbb{R}^{hd_k \times d_{\text{model}}}$</span>、<span class="math-inline">$W_K \in \mathbb{R}^{hd_k \times d_{\text{model}}}$</span>、<span class="math-inline">$W_V \in \mathbb{R}^{hd_v \times d_{\text{model}}}$</span> 和 <span class="math-inline">$W_O \in \mathbb{R}^{d_{\text{model}} \times h d_v}$</span>。由于 Q、K、V 在多头注意力运算中被切片，我们可以把 <span class="math-inline">$W_Q$</span>、<span class="math-inline">$W_K$</span> 和 <span class="math-inline">$W_V$</span> 看作沿输出维度为每个头分离。当你把这个做对之后，你应该总共用三次矩阵乘法来计算 key、value 和 query 投影。⁵</p>
+<div class="footnote">⁵ 作为一个进阶目标，尝试把 key、query 和 value 投影合并到一个权重矩阵中，这样你只需要一次矩阵乘法。</div>
+<h5>因果掩码</h5>
+<p>你的实现应防止模型关注序列中的未来 token。换句话说，如果给模型一个 token 序列 <span class="math-inline">$t_1, ..., t_n$</span>，我们想计算前缀 <span class="math-inline">$t_1, ..., t_i$</span>（其中 <span class="math-inline">$i < n$</span>）的下一个词预测，模型不应能够访问（关注）位置 <span class="math-inline">$t_{i+1}, ..., t_n$</span> 处的 token 表示，因为它在推理时生成文本时无法访问这些 token（而且这些未来 token 会泄露真实下一个词身份的信息，使语言建模预训练目标变得平凡）。对于输入 token 序列 <span class="math-inline">$t_1, ..., t_n$</span>，我们可以通过运行 <span class="math-inline">$n$</span> 次多头自注意力（对应序列中的 <span class="math-inline">$n$</span> 个唯一前缀）来朴素地阻止对未来 token 的访问。相反，我们将使用因果注意力掩码，它允许 token <span class="math-inline">$i$</span> 关注序列中所有满足 <span class="math-inline">$j \leq i$</span> 的位置 <span class="math-inline">$j$</span>。你可以使用 torch.triu 或广播的索引比较来构造这个掩码，并且应利用你从第 3.4.4 节实现的缩放点积注意力已经支持注意力掩码这一事实。</p>
+<h5>应用 RoPE</h5>
+<p>RoPE 应应用于 query 和 key 向量，但不应用于 value 向量。此外，头的维度应作为批处理维度处理，因为在多头注意力中，注意力是对每个头独立应用的。这意味着完全相同的 RoPE 旋转应应用于每个头的 query 和 key 向量。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>multihead self attention</code>）：实现因果多头自注意力（5 分）</strong></div>
+<p>提交内容：将因果多头自注意力实现为一个 torch.nn.Module。你的实现应接受（至少）以下参数：</p>
+<p>d_model: int —— Transformer 块输入的维度。</p>
+<p>num_heads: int —— 多头自注意力中使用的头数。</p>
+<p>遵循 [A. Vaswani et al. 8]，设 <span class="math-inline">$d_k = d_v = \frac{d_{model}}{h}$</span>。要针对我们提供的测试来测试你的实现，实现 [adapters.run_multihead_self_attention] 处的测试适配器。然后运行 uv run pytest -k test_multihead_self_attention 来测试你的实现。</p>
+</div>
+<h3 id="3-5">3.5 完整的 Transformer LM</h3>
+<p>让我们先组装 Transformer 块（回头参考图 2 会很有帮助）。一个 Transformer 块包含两个「子层」，一个用于多头自注意力，另一个用于 SwiGLU 前馈网络。在每个子层中，我们先执行 RMSNorm，然后是主要运算（MHA/FF），最后加上残差连接。</p>
+<p>具体来说，Transformer 块的前半部分（第一个「子层」）应实现下面这组更新，从输入 x 产生输出 y：</p>
+<div class="math-display">$$ y = x + \mathrm{MultiHeadSelfAttention}(\mathrm{RMSNorm}(x)). $$</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>transformer_block</code>）：实现 Transformer 块（3 分）</strong></div>
+<p>实现第 3.4 节所述、图 2 所示的 pre-norm Transformer 块。你的 Transformer 块应接受（至少）以下参数。</p>
+<p>d_model: int —— Transformer 块输入的维度。</p>
+<p>num_heads: int —— 多头自注意力中使用的头数。</p>
+<p>d_ff: int —— 按位置前馈内层的维度。</p>
+<p>要测试你的实现，实现 [adapters.run_transformer_block] 处的适配器。然后运行 uv run pytest -k test_transformer_block 来测试你的实现。</p>
+<p>提交内容：能通过所提供的测试的 Transformer 块代码。</p>
+<p>现在我们把各块组装起来，遵循图 1 中的高层示意图。按照第 3.1 节中对嵌入的描述，把它送入 num_layers 个 Transformer 块，再送入最后的层归一化和 LM head，得到词汇表上的未归一化分布（logits）。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>transformer_lm</code>）：实现 Transformer LM（3 分）</strong></div>
+<p>是时候把所有东西拼在一起了！实现第 3.1 节所述、图 1 所示的 Transformer 语言模型。你的实现至少应接受上述 Transformer 块的所有构造参数，以及以下附加参数：</p>
+<p>vocab_size: int —— 词汇表大小，用于确定 token 嵌入矩阵的维度。</p>
+<p>context_length: int —— 最大上下文长度，用于确定 RoPE 的 sin 和 cos 缓冲区维度。</p>
+<p>num_layers: int —— 要使用的 Transformer 块数量。</p>
+<p>要针对我们提供的测试来测试你的实现，你首先需要实现 [adapters.run_transformer_lm] 处的测试适配器。然后运行 uv run pytest -k test_transformer_lm 来测试你的实现。</p>
+<p>提交内容：一个能通过上述测试的 Transformer LM 模块。</p>
+</div>
+<h5>资源核算</h5>
+<p>能够理解 Transformer 各部分如何消耗计算和内存是很有用的。我们将逐步做一些基本的「FLOPs 核算」。Transformer 中绝大多数的 FLOPs 是矩阵乘法，所以我们的核心方法很简单：</p>
+<ol><li>写出 Transformer 前向传播中的所有矩阵乘法。</li><li>将每个矩阵乘法转换为所需的 FLOPs。</li></ol>
+<p>对于第二步，下面这个事实会很有用：</p>
+<p>规则：给定 <span class="math-inline">$A \in \mathbb{R}^{m \times n}$</span> 和 <span class="math-inline">$B \in \mathbb{R}^{n \times p}$</span>，矩阵-矩阵乘积 AB 需要 <span class="math-inline">$2mnp$</span> FLOPs。</p>
+<p>要看出这一点，注意 <span class="math-inline">$(AB)[i,j] = A[i,:] \cdot B[:,j]$</span>，这个点积需要 <span class="math-inline">$n$</span> 次加法和 <span class="math-inline">$n$</span> 次乘法（2n FLOPs）。然后，由于矩阵-矩阵乘积 <span class="math-inline">$AB$</span> 有 <span class="math-inline">$m \times p$</span> 个条目，总 FLOPs 为 <span class="math-inline">$(2n)(mp) = 2mnp$</span>。</p>
+<p>现在，在做下一个问题之前，遍历 Transformer 块和 Transformer LM 的每个组件，列出所有矩阵乘法及其相关的 FLOPs 成本，会很有帮助。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>transformer_accounting</code>）：Transformer LM 资源核算（5 分）</strong></div>
+<p>(a) 考虑一个使用我们作业架构的 GPT-2 XL 规模模型，其配置如下：</p>
+<p>vocab_size: 50,257</p>
+<p>context_length: 1,024</p>
+<p>num_layers: 48</p>
+<p>d_model: 1,600</p>
+<p>num_heads: 25</p>
+<p>d_ff: 4,288（最接近 <span class="math-inline">$\frac{8}{3} \times 1,600$</span> 的 64 的倍数）</p>
+<p>假设我们用这个配置构建了模型。我们的模型会有多少可训练参数？假设每个参数用单精度浮点表示，仅加载这个模型需要多少内存？</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(b) 找出完成我们 GPT-2 XL 形状模型一次前向传播所需的矩阵乘法。这些矩阵乘法总共需要多少 FLOPs？假设输入序列有 context_length 个 token。</p>
+<p>提交内容：一个矩阵乘法列表（带描述），以及所需的 FLOPs 总数。</p>
+<p>(c) 基于你上面的分析，模型的哪些部分需要最多的 FLOPs？</p>
+<p>提交内容：一到两句话回答。</p>
+<p>(d) 用 GPT-2 small（12 层，768 d_model，12 头）、GPT-2 medium（24 层，1024 d_model，16 头）和 GPT-2 large（36 层，1280 d_model，20 头）重复你的分析。随着模型规模增大，Transformer LM 的哪些部分占总 FLOPs 的比例会相对增大或减小？</p>
+<p>提交内容：对每个模型，给出模型组件的分解及其相关 FLOPs（占一次前向传播所需总 FLOPs 的比例）。此外，用一到两句话描述改变模型规模如何改变每个组件的 FLOPs 占比。</p>
+<p>(e) 取 GPT-2 XL 并把上下文长度增加到 16,384。一次前向传播的总 FLOPs 如何变化？模型各组件 FLOPs 的相对贡献如何变化？</p>
+<p>提交内容：一到两句话回答。</p>
+</div>
+<h2 id="4">4 训练 Transformer LM</h2>
+<p>现在我们已经有了预处理数据的步骤（通过分词器）和模型（Transformer）。剩下的就是构建支持训练的全部代码。这包括以下内容：</p>
+<ul><li>损失：我们需要定义损失函数（交叉熵）。</li><li>优化器：我们需要定义用于最小化该损失的优化器（AdamW）。</li><li>训练循环：我们需要所有加载数据、保存检查点和管理训练的支持性基础设施。</li></ul>
+<h3 id="4-1">4.1 交叉熵损失</h3>
+<p>回顾一下，Transformer 语言模型为每个长度为 <span class="math-inline">$m+1$</span> 的序列 x 以及 <span class="math-inline">$i=1,...,m$</span> 定义一个分布 <span class="math-inline">$p_{\theta}(x_{i+1} \mid x_{1:i})$</span>。给定一个由长度为 <span class="math-inline">$m+1$</span> 的序列组成的训练集 D，我们定义标准的交叉熵（负对数似然）损失函数：</p>
+<div class="math-display">$$ \ell(\theta; D) = \frac{1}{|D| m} \sum_{x \in D} \sum_{i=1}^{m} -\log p_{\theta}(x_{i+1} | x_{1:i}). $$</div>
+<p>（注意，Transformer 中的一次前向传播会为所有 <span class="math-inline">$i = 1, ..., m$</span> 产生 <span class="math-inline">$p_{\theta}(x_{i+1} \mid x_{1:i})$</span>。）</p>
+<p>特别地，Transformer 为每个位置 <span class="math-inline">$i$</span> 计算 logits <span class="math-inline">$o_i \in \mathbb{R}^{\text{vocab\_size}}$</span>，从而得到：⁶</p>
+<div class="math-display">$$ p(x_{i+1} | x_{1:i}) = \mathrm{softmax}(o_i)[x_{i+1}] = \frac{\exp(o_i[x_{i+1}])}{\sum_{a=1}^{\text{vocab\_size}} \exp(o_i[a])}. $$</div>
+<p>交叉熵损失通常相对于 logits 向量 <span class="math-inline">$o_i \in \mathbb{R}^{\text{vocab\_size}}$</span> 和目标 <span class="math-inline">$x_{i+1}$</span> 来定义。⁷</p>
+<div class="footnote">⁶ 注意，<span class="math-inline">$o_i[k]$</span> 指的是向量 <span class="math-inline">$o_i$</span> 中索引 <span class="math-inline">$k$</span> 处的值。⁷ 这对应于 <span class="math-inline">$x_{i+1}$</span> 上的 Dirac delta 分布与预测的 <span class="math-inline">$\mathrm{softmax}(o_i)$</span> 分布之间的交叉熵。</div>
+<p>实现交叉熵损失需要像 softmax 一样小心处理数值问题。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>cross_entropy</code>）：实现交叉熵（1 分）</strong></div>
+<p>提交内容：编写一个函数来计算交叉熵损失，它接收预测的 logits <span class="math-inline">$(o_i)$</span> 和目标 <span class="math-inline">$(x_{i+1})$</span>，并计算交叉熵 <span class="math-inline">$\ell_i = -\log \mathrm{softmax}(o_i)[x_{i+1}]$</span>。你的函数应处理以下情况：</p>
+<ul><li>为数值稳定性减去最大的元素。</li><li>尽可能把 log 和 exp 相互抵消。</li><li>处理任意额外的批处理维度，并返回跨批的平均值。与第 3.2 节一样，我们假设批处理式维度始终在最前面，位于词汇表大小维度之前。</li></ul>
+<p>实现 [adapters.run_cross_entropy]，然后运行 uv run pytest -k test_cross_entropy 来测试你的实现。</p>
+</div>
+<h5>困惑度（Perplexity）</h5>
+<p>交叉熵足以用于训练，但当我们评估模型时，我们还希望报告困惑度。对于一个长度为 <span class="math-inline">$m$</span>、我们承受交叉熵损失 <span class="math-inline">$\ell_1, ..., \ell_m$</span> 的序列：</p>
+<div class="math-display">$$ \mathrm{perplexity} = \exp\left(\frac{1}{m}\sum_{i=1}^{m} \ell_i\right). $$</div>
+<h3 id="4-2">4.2 SGD 优化器</h3>
+<p>现在我们有了损失函数，将开始探索优化器。最简单的基于梯度的优化器是随机梯度下降（Stochastic Gradient Descent，SGD）。我们从随机初始化的参数 <span class="math-inline">$\theta_0$</span> 开始。然后对于每一步 <span class="math-inline">$t = 0, ..., T - 1$</span>，我们执行以下更新：</p>
+<div class="math-display">$$ \theta_{t+1} \leftarrow \theta_t - \alpha_t \nabla L(\theta_t; B_t), $$</div>
+<p>其中 <span class="math-inline">$B_t$</span> 是从数据集 D 中采样的一批随机数据，学习率 <span class="math-inline">$\alpha_t$</span> 和批量大小 <span class="math-inline">$|B_t|$</span> 是超参数。</p>
+<h4 id="4-2-1">4.2.1 在 PyTorch 中实现 SGD</h4>
+<p>要实现我们的优化器，我们将继承 PyTorch 的 torch.optim.Optimizer 类。一个 Optimizer 子类必须实现两个方法：</p>
+<p>def __init__(self, params, ...) —— 应初始化你的优化器。这里，params 是要优化的参数集合（或参数组，以防用户想对模型的不同部分使用不同的超参数，例如不同的学习率）。务必将 params 传给基类的 __init__ 方法，基类会存储这些参数供 step 使用。你可以根据优化器接受额外参数（学习率是常见的一个），并把它们作为字典传给基类构造函数，其中键是你为这些参数选择的名字（字符串）。</p>
+<p>def step(self) —— 应对参数做一次更新。在训练循环中，它会在反向传播之后被调用，因此你可以访问最后一批数据的梯度。此方法应遍历每个参数张量 p，并基于梯度 p.grad（如果存在的话，它是损失相对于该参数的梯度张量）就地修改它们，即设置 p.data（p.data 保存与该参数关联的张量）。</p>
+<p>PyTorch 优化器 API 有一些微妙之处，所以用例子来解释更容易。为了让例子更丰富，我们将实现 SGD 的一个轻微变体，其中学习率随训练衰减，从一个初始学习率 <span class="math-inline">$\alpha$</span> 开始，随时间采取越来越小的步长：</p>
+<div class="math-display">$$ \theta_{t+1} = \theta_t - \frac{\alpha}{\sqrt{t+1}} \nabla L(\theta_t; B_t) $$</div>
+<p>让我们看看这个 SGD 变体会如何作为 PyTorch Optimizer 实现：</p>
+<pre class="codeblock"><code><span style="color: #D73948">from</span> <span style="color: #000">collections.abc</span> <span style="color: #D73948">import</span> Callable<span style="color: #000">,</span> Iterable
+<span style="color: #D73948">from</span> <span style="color: #000">typing</span> <span style="color: #D73948">import</span> Optional
+<span style="color: #D73948">import</span> <span style="color: #000">torch</span>
+<span style="color: #D73948">import</span> <span style="color: #000">math</span>
+
+<span style="color: #D73948">class</span> <span style="color: #000">SGD(</span>torch<span style="color: #D73948">.</span>optim<span style="color: #D73948">.</span>Optimizer<span style="color: #000">):</span>
+    <span style="color: #D73948">def</span> <span style="color: #000">__init__(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> params<span style="color: #000">,</span> lr<span style="color: #D73948">=</span><span style="color: #B60157">1e-3</span><span style="color: #000">):</span>
+        <span style="color: #D73948">if</span> lr <span style="color: #D73948">&lt;</span> <span style="color: #B60157">0</span><span style="color: #000">:</span>
+            <span style="color: #D73948">raise</span> <span style="color: #D73948">ValueError</span><span style="color: #000">(</span><span style="color: #198810">f"Invalid learning rate: {</span>lr<span style="color: #198810">}"</span><span style="color: #000">)</span>
+        defaults <span style="color: #D73948">=</span> <span style="color: #000">{</span><span style="color: #198810">"lr"</span><span style="color: #000">:</span> lr<span style="color: #000">}</span>
+        <span style="color: #4B69C6">super</span><span style="color: #000">()</span><span style="color: #D73948">.</span><span style="color: #000">__init__(</span>params<span style="color: #000">,</span> defaults<span style="color: #000">)</span>
+
+    <span style="color: #D73948">def</span> <span style="color: #000">step(</span><span style="color: #4B69C6">self</span><span style="color: #000">,</span> closure<span style="color: #000">:</span> Optional<span style="color: #000">[</span>Callable<span style="color: #000">]</span> <span style="color: #D73948">=</span> <span style="color: #D73948">None</span><span style="color: #000">):</span>
+        loss <span style="color: #D73948">=</span> <span style="color: #D73948">None</span> <span style="color: #D73948">if</span> closure <span style="color: #D73948">is</span> <span style="color: #D73948">None</span> <span style="color: #D73948">else</span> closure<span style="color: #000">()</span>
+        <span style="color: #D73948">for</span> group <span style="color: #D73948">in</span> <span style="color: #4B69C6">self</span><span style="color: #D73948">.</span>param_groups<span style="color: #000">:</span>
+            lr <span style="color: #D73948">=</span> group<span style="color: #000">[</span><span style="color: #198810">"lr"</span><span style="color: #000">]</span>  <span style="color: #74747C; font-style: italic"># 获取学习率。</span>
+            <span style="color: #D73948">for</span> p <span style="color: #D73948">in</span> group<span style="color: #000">[</span><span style="color: #198810">"params"</span><span style="color: #000">]:</span>
+                <span style="color: #D73948">if</span> p<span style="color: #D73948">.</span>grad <span style="color: #D73948">is</span> <span style="color: #D73948">None</span><span style="color: #000">:</span>
+                    <span style="color: #D73948">continue</span>
+                state <span style="color: #D73948">=</span> <span style="color: #4B69C6">self</span><span style="color: #D73948">.</span>state<span style="color: #000">[</span>p<span style="color: #000">]</span>  <span style="color: #74747C; font-style: italic"># 获取与 p 关联的状态。</span>
+                t <span style="color: #D73948">=</span> state<span style="color: #D73948">.</span>get<span style="color: #000">(</span><span style="color: #198810">"t"</span><span style="color: #000">,</span> <span style="color: #B60157">0</span><span style="color: #000">)</span>  <span style="color: #74747C; font-style: italic"># 从状态中获取迭代次数，或 0。</span>
+                grad <span style="color: #D73948">=</span> p<span style="color: #D73948">.</span>grad<span style="color: #D73948">.</span>data  <span style="color: #74747C; font-style: italic"># 获取损失相对于 p 的梯度。</span>
+                p<span style="color: #D73948">.</span>data <span style="color: #D73948">-=</span> lr <span style="color: #D73948">/</span> math<span style="color: #D73948">.</span>sqrt<span style="color: #000">(</span>t <span style="color: #D73948">+</span> <span style="color: #B60157">1</span><span style="color: #000">)</span> <span style="color: #D73948">*</span> grad  <span style="color: #74747C; font-style: italic"># 就地更新权重张量。</span>
+                state<span style="color: #000">[</span><span style="color: #198810">"t"</span><span style="color: #000">]</span> <span style="color: #D73948">=</span> t <span style="color: #D73948">+</span> <span style="color: #B60157">1</span>  <span style="color: #74747C; font-style: italic"># 递增迭代次数。</span>
+        <span style="color: #D73948">return</span> loss
+</code></pre>
+<p>在 __init__ 中，我们把参数以及默认超参数传给基类构造函数（参数可能以组的形式出现，每组有不同的超参数）。如果参数只是单个 torch.nn.Parameter 对象集合，基类构造函数会创建单个组并给它分配默认超参数。然后，在 step 中，我们遍历每个参数组，再遍历该组中的每个参数，并应用公式 20。这里，我们把迭代次数保存为与每个参数关联的状态：我们先读取这个值，在梯度更新中使用它，然后再更新它。API 规定用户可以传入一个可调用的 closure，在优化器步进之前重新计算损失。对于我们使用的优化器，我们不需要这个，但为了符合 API 我们加上它。</p>
+<p>要看到它的工作效果，我们可以使用下面这个最小的训练循环示例：</p>
+<pre class="codeblock"><code>weights <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>nn<span style="color: #D73948">.</span>Parameter<span style="color: #000">(</span><span style="color: #B60157">5</span> <span style="color: #D73948">*</span> torch<span style="color: #D73948">.</span>randn<span style="color: #000">((</span><span style="color: #B60157">10</span><span style="color: #000">,</span> <span style="color: #B60157">10</span><span style="color: #000">)))</span>
+opt <span style="color: #D73948">=</span> SGD<span style="color: #000">([</span>weights<span style="color: #000">],</span> lr<span style="color: #D73948">=</span><span style="color: #B60157">1</span><span style="color: #000">)</span>
+
+<span style="color: #D73948">for</span> t <span style="color: #D73948">in</span> <span style="color: #4B69C6">range</span><span style="color: #000">(</span><span style="color: #B60157">100</span><span style="color: #000">):</span>
+    opt<span style="color: #D73948">.</span>zero_grad<span style="color: #000">()</span>  <span style="color: #74747C; font-style: italic"># 重置所有可学习参数的梯度。</span>
+    loss <span style="color: #D73948">=</span> <span style="color: #000">(</span>weights<span style="color: #D73948">**</span><span style="color: #B60157">2</span><span style="color: #000">)</span><span style="color: #D73948">.</span>mean<span style="color: #000">()</span>  <span style="color: #74747C; font-style: italic"># 计算一个标量损失值。</span>
+    <span style="color: #4B69C6">print</span><span style="color: #000">(</span>loss<span style="color: #D73948">.</span>cpu<span style="color: #000">()</span><span style="color: #D73948">.</span>item<span style="color: #000">())</span>
+
+    loss<span style="color: #D73948">.</span>backward<span style="color: #000">()</span>  <span style="color: #74747C; font-style: italic"># 运行反向传播，计算梯度。</span>
+    opt<span style="color: #D73948">.</span>step<span style="color: #000">()</span>  <span style="color: #74747C; font-style: italic"># 运行优化器步进。</span>
+</code></pre>
+<p>这是训练循环的典型结构：在每次迭代中，我们计算损失并运行一步优化器。训练语言模型时，我们的可学习参数来自模型（在 PyTorch 中，m.parameters() 给了我们这个集合）。损失将在一批采样数据上计算，但训练循环的基本结构是相同的。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>learning_rate_tuning</code>）：调整学习率（1 分）</strong></div>
+<p>正如我们将看到的，对训练影响最大的超参数之一是学习率。让我们在这个玩具示例中实际看看。用另外三个学习率值运行上面的 SGD 示例：1e1、1e2 和 1e3，只运行 10 次训练迭代。对于这些学习率中的每一个，损失会怎样？它衰减得更快、更慢，还是发散（即随训练过程增加）？</p>
+<p>提交内容：用一到两句话回答，并附上你观察到的行为。</p>
+</div>
+<h3 id="4-3">4.3 AdamW</h3>
+<p>现代语言模型通常用比 SGD 更复杂的优化器训练。最近使用的大多数优化器都是 Adam 优化器 [D. P. Kingma et al., 2015] 的衍生物。我们将使用 AdamW [Loshchilov et al., 2019]，它在近期工作中被广泛使用。AdamW 对 Adam 提出一个修改，通过加入权重衰减（每次迭代把参数拉向 0）来改善正则化，其方式与梯度更新解耦。我们将按 [Loshchilov et al., 2019] 的算法 2 中所述实现 AdamW。</p>
+<p>AdamW 是有状态的：对每个参数，它跟踪其一阶矩和二阶矩的运行估计。因此，AdamW 以额外内存换取改进的稳定性和收敛性。除了学习率 <span class="math-inline">$\alpha$</span>，AdamW 还有一对控制矩估计更新的超参数 <span class="math-inline">$(\beta_1, \beta_2)$</span>，以及一个权重衰减率 <span class="math-inline">$\lambda$</span>。典型应用把 <span class="math-inline">$(\beta_1, \beta_2)$</span> 设为 <span class="math-inline">$(0.9, 0.999)$</span>，但像 LLaMA [H. Touvron et al., 2023] 和 GPT-3 [T. B. Brown et al., 2020] 这样的大型语言模型通常用 <span class="math-inline">$(0.9, 0.95)$</span> 训练。算法可以写成如下形式，其中 <span class="math-inline">$\varepsilon$</span> 是一个小值（例如 <span class="math-inline">$10^{-8}$</span>），用于在 <span class="math-inline">$v$</span> 中出现极小值时改善数值稳定性：</p>
+<pre class="codeblock algorithm"><code>算法 1：AdamW 优化器
+
+1   init(θ)                                     ▷ 初始化可学习参数
+2   m ← 0                                       ▷ 一阶矩向量初始值；与 θ 形状相同
+3   v ← 0                                       ▷ 二阶矩向量初始值；与 θ 形状相同
+4   for t = 1, ..., T do
+5       采样一批数据 B_t
+6       g ← ∇_θ ℓ(θ; B_t)                       ▷ 计算损失的梯度
+7       α_t ← α · sqrt(1 - β_2^t) / (1 - β_1^t) ▷ 计算第 t 次迭代调整后的 α
+8       θ ← θ - α λ θ                           ▷ 应用权重衰减
+9       m ← β_1 m + (1 - β_1) g                 ▷ 更新一阶矩估计
+10      v ← β_2 v + (1 - β_2) g^2               ▷ 更新二阶矩估计
+11      θ ← θ - α_t · m / (sqrt(v) + ε)         ▷ 应用经矩调整的权重更新
+12  end for</code></pre>
+<div class="caption"><strong>算法 1：AdamW 优化器伪代码。</strong></div>
+<p>注意 t 从 1 开始。你现在将实现这个优化器。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>adamw</code>）：实现 AdamW（2 分）</strong></div>
+<p>提交内容：将 AdamW 优化器实现为 torch.optim.Optimizer 的子类。你的类应在 __init__ 中接收学习率 <span class="math-inline">$\alpha$</span>，以及 <span class="math-inline">$\beta$</span>、<span class="math-inline">$\varepsilon$</span> 和 <span class="math-inline">$\lambda$</span> 超参数。为了帮你保存状态，基 Optimizer 类给了你一个字典 self.state，它将 nn.Parameter 对象映射到一个字典，该字典存储该参数所需的任何信息（对于 AdamW，这将是矩估计）。实现 [adapters.get_adamw_cls]，并确保它能通过 uv run pytest -k test_adamw。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>adamw_accounting</code>）：使用 AdamW 训练的资源核算（2 分）</strong></div>
+<p>让我们计算运行 AdamW 需要多少内存和计算。假设每个张量都使用 float32。</p>
+<p>(a) 运行 AdamW 需要多少峰值内存？基于参数、激活值、梯度和优化器状态的内存使用来分解你的答案。用 batch_size 和模型超参数（vocab_size、context_length、num_layers、d_model、num_heads）表示你的答案。假设 <span class="math-inline">$d_{ff} = \frac{8}{3} \times d_{model}$</span>。</p>
+<p>为简单起见，在计算激活值的内存使用时，只考虑以下组件：</p>
+<ul><li>Transformer 块</li></ul>
+<p>- RMSNorm(s)</p>
+<p>- 多头自注意力子层：QKV 投影、<span class="math-inline">$QK^{\top}$</span> 矩阵乘法、softmax、value 的加权求和、输出投影。</p>
+<p>- 按位置的前馈（SwiGLU）：<span class="math-inline">$W_1$</span>、<span class="math-inline">$W_2$</span>、门控分支上的 SiLU、逐元素乘积、<span class="math-inline">$W_3$</span></p>
+<ul><li>最终的 RMSNorm</li><li>输出嵌入</li><li>对 logits 的交叉熵</li></ul>
+<p>提交内容：对参数、激活值、梯度和优化器状态中的每一项给出代数表达式，以及总和。</p>
+<p>(b) 把你的答案代入 GPT-2 XL 形状的模型，得到一个只依赖 batch_size 的表达式。在 80GB 内存内你能使用的最大批量大小是多少？</p>
+<p>提交内容：一个形如 <span class="math-inline">$a \cdot \text{batch\_size} + b$</span> 的表达式（a、b 为数值），以及一个表示最大批量大小的数字。</p>
+<p>(c) 运行一步 AdamW 需要多少 FLOPs？</p>
+<p>提交内容：一个代数表达式，附简要说明。</p>
+<p>(d) 模型 FLOPs 利用率（MFU）定义为观测到的吞吐量（每秒 token 数）相对于硬件理论峰值 FLOP 吞吐量的比率 [A. Chowdhery et al., 2022]。一块 NVIDIA H100 GPU 的「float32」（实际上是 TensorFloat-32，实际上是 &quot;bfloat19&quot;）运算理论峰值为 495 teraFLOP/s。假设你能达到 50% MFU，在一块 H100 上以 1024 的批量大小训练 GPT-2 XL 400K 步需要多长时间？遵循 J. Kaplan et al. [25] 和 J. Hoffmann et al. [26]，假设反向传播的 FLOPs 是前向传播的两倍。</p>
+<p>提交内容：训练所需的时长（以小时计），附简要说明。</p>
+</div>
+<h3 id="4-4">4.4 学习率调度</h3>
+<p>使损失最快下降的学习率值在训练过程中往往会变化。在训练 Transformer 时，通常使用学习率调度（schedule），我们从较大的学习率开始，在开始时进行更快的更新，并随着模型训练缓慢衰减到较小的值。⁸</p>
+<div class="footnote">⁸ 有时也常见使用一种学习率回升（restart）的调度，以帮助越过局部极小值。 在本作业中，我们将实现训练 LLaMA [H. Touvron et al., 2023] 所用的余弦退火（cosine annealing）调度。</div>
+<p>调度器只是一个函数，它接收当前步 t 和其他相关参数（例如初始和最终学习率），并返回在第 t 步的梯度更新中要使用的学习率。最简单的调度是常函数，它对于任何 t 都返回相同的学习率。</p>
+<p>余弦退火学习率调度接收：(i) 当前迭代 t，(ii) 最大学习率 <span class="math-inline">$\alpha_{\max}$</span>，(iii) 最小（最终）学习率 <span class="math-inline">$\alpha_{\min}$</span>，(iv) 预热（warm-up）迭代次数 <span class="math-inline">$T_w$</span>，以及 (v) 余弦退火的最终迭代 <span class="math-inline">$T_c$</span>。第 t 次迭代的学习率定义为：</p>
+<p>（预热）若 <span class="math-inline">$t < T_w$</span>，则 <span class="math-inline">$\alpha_t = \frac{t}{T_w} \alpha_{\max}$</span>。</p>
+<p>（余弦退火）若 <span class="math-inline">$T_w \leq t \leq T_c$</span>，则 <span class="math-inline">$\alpha_t = \alpha_{\min} + \frac{1}{2} \left(1 + \cos\left(\frac{t - T_w}{T_c - T_w} \pi\right)\right) (\alpha_{\max} - \alpha_{\min})$</span>。</p>
+<p>（退火之后）若 <span class="math-inline">$t > T_c$</span>，则 <span class="math-inline">$\alpha_t = \alpha_{\min}$</span>。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>learning_rate_schedule</code>）：实现带预热的余弦学习率调度（1 分）</strong></div>
+<p>编写一个函数，接收 <span class="math-inline">$t$</span>、<span class="math-inline">$\alpha_{\max}$</span>、<span class="math-inline">$\alpha_{\min}$</span>、<span class="math-inline">$T_w$</span> 和 <span class="math-inline">$T_c$</span>，并根据上面定义的调度器返回学习率 <span class="math-inline">$\alpha_t$</span>。然后实现 [adapters.get_lr_cosine_schedule]，并确保它能通过 uv run pytest -k test_get_lr_cosine_schedule。</p>
+</div>
+<h3 id="4-5">4.5 梯度裁剪</h3>
+<p>在训练期间，我们有时会遇到产生大梯度的训练样本，这会破坏训练的稳定性。为了缓解这一点，实践中常用的一种技术是梯度裁剪。其思想是在每次反向传播之后、执行优化器步进之前，对梯度的范数施加一个限制。</p>
+<p>给定（所有参数的）梯度 <span class="math-inline">$g$</span>，我们计算它的 <span class="math-inline">$\ell_2$</span>-范数 <span class="math-inline">$\|g\|_2$</span>。如果这个范数小于最大值 <span class="math-inline">$M$</span>，则保持 <span class="math-inline">$g$</span> 不变；否则，我们把 <span class="math-inline">$g$</span> 按因子 <span class="math-inline">$\frac{M}{\|g\|_2 + \varepsilon}$</span> 缩小（其中为了数值稳定性加一个小的 <span class="math-inline">$\varepsilon$</span>，如 <span class="math-inline">$10^{-6}$</span>）。注意，得到的范数会略小于 <span class="math-inline">$M$</span>。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>gradient_clipping</code>）：实现梯度裁剪（1 分）</strong></div>
+<p>编写一个实现梯度裁剪的函数。你的函数应接收一个参数列表和一个最大 <span class="math-inline">$\ell_2$</span>-范数。它应就地修改每个参数的梯度。使用 <span class="math-inline">$\varepsilon = 10^{-6}$</span>（PyTorch 默认值）。然后，实现 [adapters.run_gradient_clipping] 处的适配器，并确保它能通过 uv run pytest -k test_gradient_clipping。</p>
+</div>
+<h2 id="5">5 训练循环</h2>
+<p>现在，我们终于要把到目前为止构建的主要组件放到一起：分词后的数据、模型和优化器。</p>
+<h3 id="5-1">5.1 数据加载器</h3>
+<p>分词后的数据（例如你在 tokenizer_experiments 中准备的数据）是一个单一的 token 序列 <span class="math-inline">$x = (x_1, ..., x_n)$</span>。尽管源数据可能由独立的文档组成（例如不同的网页或源代码文件），常见的做法是把它们全部连接成一个单一的 token 序列，在它们之间加入一个分隔符（例如 &lt;|endoftext|&gt; token）。</p>
+<p>数据加载器把它转换为一批批（batch）的流，其中每个批由 <span class="math-inline">$B$</span> 个长度为 <span class="math-inline">$m$</span> 的序列组成，并与对应的长度为 <span class="math-inline">$m$</span> 的下一个 token 配对。例如，对于 <span class="math-inline">$B=1, m=3$</span>，<span class="math-inline">$([x_2, x_3, x_4], [x_3, x_4, x_5])$</span> 就是一个可能的批。</p>
+<p>以这种方式加载数据简化了训练，原因有几个。首先，任何 <span class="math-inline">$1 \leq i \leq n - m$</span> 都给出一个有效的训练序列，所以采样训练序列是平凡的。由于所有训练序列长度相同，无需对输入序列进行填充，这提高了硬件利用率（也通过增大批量大小 <span class="math-inline">$B$</span>）。最后，我们也不需要加载完整数据集来采样训练数据，从而更容易处理那些否则可能无法放入内存的大型数据集。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>data loading</code>）：实现数据加载（2 分）</strong></div>
+<p>提交内容：编写一个函数，接收一个 numpy 数组 x（包含 token ID 的整数数组）、一个 batch_size、一个 context_length 和一个 PyTorch 设备字符串（例如 &#x27;cpu&#x27; 或 &#x27;cuda:0&#x27;），并返回一对张量：采样到的输入序列和对应的下一个 token 目标。两个张量都应为形状 (batch_size, context_length) 且包含 token ID，并且都应放在所请求的设备上。要针对我们提供的测试来测试你的实现，你首先需要实现 [adapters.run_get_batch] 处的测试适配器。然后运行 uv run pytest -k test_get_batch 来测试你的实现。</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：在 CPU 或 Apple Silicon 上加载数据</strong></div>
+<p>如果你计划在 CPU 或 Apple Silicon 上训练你的 LM，你需要把数据移到正确的设备上（同样，稍后你的模型也应使用相同的设备）。</p>
+<p>如果你在 CPU 上，可以使用 &#x27;cpu&#x27; 设备字符串；在 Apple Silicon（M* 芯片）上，可以使用 &#x27;mps&#x27; 设备字符串。</p>
+<p>关于 MPS 的更多信息，请查看这些资源：</p>
+<ul><li><a href="https://docs.pytorch.org/docs/stable/mps.html">https://docs.pytorch.org/docs/stable/mps.html</a></li><li><a href="https://docs.pytorch.org/docs/stable/notes/mps.html">https://docs.pytorch.org/docs/stable/notes/mps.html</a></li><li><a href="https://developer.apple.com/documentation/metalperformanceshaders">https://developer.apple.com/documentation/metalperformanceshaders</a></li></ul>
+<p>如果数据集太大无法加载到内存怎么办？我们可以使用一个名为 mmap 的 Unix 系统调用，它把磁盘上的文件映射到虚拟内存，并在访问该内存位置时惰性加载文件内容。因此，你可以「假装」整个数据集都在内存中。NumPy 通过 np.memmap（或者在你最初用 np.save 保存数组时使用 np.load 的 mmap_mode=&#x27;r&#x27; 标志）来实现这一点，它会返回一个类似 numpy 数组的对象，在访问时按需加载条目。在训练期间从你的数据集（即一个 numpy 数组）采样时，务必以内存映射模式加载数据集（根据你保存数组的方式，通过 np.memmap 或 np.load 的 mmap_mode=&#x27;r&#x27; 标志）。还要确保你指定的 dtype 与你正在加载的数组匹配。显式验证内存映射的数据看起来正确（例如不包含超出预期词汇表大小的值）可能会有所帮助。</p>
+</div>
+<h3 id="5-2">5.2 检查点</h3>
+<p>除了加载数据，我们还需要在训练时保存模型。运行作业时，我们通常希望能够恢复一个中途停止的训练运行（例如因为你的作业超时、机器故障等）。即使一切顺利，我们也可能希望稍后能访问中间模型（例如事后研究训练动态、从不同训练阶段的模型采样等）。</p>
+<p>一个检查点应包含我们恢复训练所需的全部状态。我们当然至少希望能恢复模型权重。如果使用有状态的优化器（如 AdamW），我们还需要保存优化器的状态（例如 AdamW 情况下的矩估计）。最后，为了恢复学习率调度，我们需要知道我们停在哪一步迭代。PyTorch 让保存所有这些变得容易：每个 nn.Module 都有一个 state_dict() 方法，返回一个包含所有可学习权重的字典；我们之后可以用配套方法 load_state_dict() 恢复这些权重。任何 torch.optim.Optimizer 也是如此。最后，torch.save(obj, dest) 可以把一个对象（例如一个字典，其中一些值是张量，但也可以是整数等普通 Python 对象）转储到文件（路径）或类文件对象，之后可以用 torch.load(src) 加载回内存。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>checkpointing</code>）：实现模型检查点（1 分）</strong></div>
+<p>实现下面两个函数来加载和保存检查点：</p>
+<pre class="codeblock"><code><span style="color: #D73948">def</span> <span style="color: #000">save_checkpoint(</span>model<span style="color: #000">,</span> optimizer<span style="color: #000">,</span> iteration<span style="color: #000">,</span> out<span style="color: #000">)</span>
+    把模型、优化器和迭代次数的全部状态转储到类文件对象 out 中。你可以使用模型和优化器的 state_dict 方法获取它们各自的相关状态，并用 torch<span style="color: #D73948">.</span>save<span style="color: #000">(</span>obj<span style="color: #000">,</span> out<span style="color: #000">)</span> 把 obj 转储到 out（这里 PyTorch 支持路径或类文件对象）。一个典型的选择是让 obj 是一个字典，但你可以用任何格式，只要之后能加载你的检查点即可。
+
+    该函数应接收以下参数：
+    model<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>nn<span style="color: #D73948">.</span>Module
+    optimizer<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>optim<span style="color: #D73948">.</span>Optimizer
+    iteration<span style="color: #000">:</span> <span style="color: #4B69C6">int</span>
+    out<span style="color: #000">:</span> <span style="color: #4B69C6">str</span> <span style="color: #D73948">|</span> os<span style="color: #D73948">.</span>PathLike <span style="color: #D73948">|</span> typing<span style="color: #D73948">.</span>BinaryIO <span style="color: #D73948">|</span> typing<span style="color: #D73948">.</span>IO<span style="color: #000">[</span><span style="color: #4B69C6">bytes</span><span style="color: #000">]</span>
+
+<span style="color: #D73948">def</span> <span style="color: #000">load_checkpoint(</span>src<span style="color: #000">,</span> model<span style="color: #000">,</span> optimizer<span style="color: #000">)</span>
+    从 src（路径或类文件对象）加载检查点，然后从该检查点恢复模型和优化器状态。你的函数应返回保存到检查点中的迭代次数。你可以用 torch<span style="color: #D73948">.</span>load<span style="color: #000">(</span>src<span style="color: #000">)</span> 恢复你在 save_checkpoint 实现中保存的内容，并用模型和优化器的 load_state_dict 方法把它们恢复到之前的状态。
+
+    该函数应接收以下参数：
+    src<span style="color: #000">:</span> <span style="color: #4B69C6">str</span> <span style="color: #D73948">|</span> os<span style="color: #D73948">.</span>PathLike <span style="color: #D73948">|</span> typing<span style="color: #D73948">.</span>BinaryIO <span style="color: #D73948">|</span> typing<span style="color: #D73948">.</span>IO<span style="color: #000">[</span><span style="color: #4B69C6">bytes</span><span style="color: #000">]</span>
+    model<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>nn<span style="color: #D73948">.</span>Module
+    optimizer<span style="color: #000">:</span> torch<span style="color: #D73948">.</span>optim<span style="color: #D73948">.</span>Optimizer
+</code></pre>
+<p>实现 [adapters.run_save_checkpoint] 和 [adapters.run_load_checkpoint] 适配器，并确保它们能通过 uv run pytest -k test_checkpointing。</p>
+</div>
+<h3 id="5-3">5.3 训练循环</h3>
+<p>现在，终于到了把你实现的所有组件组合到主训练脚本中的时候了。让训练脚本能够方便地用不同超参数启动训练运行（例如把它们作为命令行参数）是值得的，因为你稍后要多次这样做来研究不同选择如何影响训练。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>training_together</code>）：组合到一起（4 分）</strong></div>
+<p>提交内容：编写一个脚本，运行训练循环，在用户提供的输入上训练你的模型。特别地，我们建议你的训练脚本至少允许以下功能：</p>
+<ul><li>能够配置和控制各种模型和优化器超参数。</li><li>用 np.memmap 高效加载大型训练集和验证集。</li><li>把检查点序列化到用户提供的路径。</li><li>定期记录训练和验证性能（例如输出到控制台和/或像 Weights and Biases 这样的外部服务）。⁹</li></ul>
+</div>
+<div class="footnote">⁹ wandb.ai</div>
+<h2 id="6">6 生成文本</h2>
+<p>现在我们可以训练模型了，我们需要的最后一块是能够从模型生成文本。回顾一下，语言模型接收一个（可能批处理的）长度为 sequence_length 的整数序列，并产生一个大小为 (sequence_length, vocab_size) 的矩阵，其中序列的每个元素都是一个预测该位置之后下一个 token 的概率分布。现在我们将编写几个函数，把它转化为新序列的采样方案。</p>
+<h5>Softmax</h5>
+<p>按标准约定，语言模型的输出是最后一个线性层的输出（「logits」），所以我们必须通过 softmax 运算把它转化为归一化概率，正如我们之前在公式 10 中看到的那样。</p>
+<h5>解码</h5>
+<p>要从我们的模型生成文本（解码），我们给模型一个前缀 token 序列（「prompt」），让它产生一个预测序列中下一个 token 的、词汇表上的概率分布。然后，我们从这个词汇表项上的分布采样，来确定下一个输出 token。</p>
+<p>具体来说，解码过程的一步应接收一个序列 <span class="math-inline">$x_{1...t}$</span>，并通过下面的公式返回一个 token <span class="math-inline">$x_{t+1}$</span>：</p>
+<div class="math-display">$$ P(x_{t+1}=i \mid x_{1...t}) = \frac{\exp(v_i)}{\sum_j \exp(v_j)} $$</div>
+<div class="math-display">$$ v = \mathrm{TransformerLM}(x_{1...t})_t \in \mathbb{R}^{\text{vocab\_size}} $$</div>
+<p>其中 TransformerLM 是我们的模型，它接收长度为 sequence_length 的序列作为输入，并产生大小为 (sequence_length, vocab_size) 的矩阵，我们取这个矩阵的最后一个元素，因为我们要找的是第 t 个位置的下一个 token 预测。</p>
+<p>这给了我们一个基本的解码器：反复从这些单步条件分布中采样（把我们之前生成的输出 token 追加到下一个解码时间步的输入），直到我们生成序列结束 token &lt;|endoftext|&gt;（或达到用户指定的最大生成 token 数）。</p>
+<h5>解码器技巧</h5>
+<p>我们将用小模型做实验，而小模型有时会生成质量很低的文本。两个简单的解码器技巧可以帮助解决这些问题。首先，在温度缩放（temperature scaling）中，我们用温度参数 <span class="math-inline">$\tau$</span> 修改我们的 softmax，新的 softmax 为</p>
+<div class="math-display">$$ \mathrm{softmax}(v, \tau)_i = \frac{\exp(v_i/\tau)}{\sum_{j=1}^{\text{vocab\_size}} \exp(v_j/\tau)}. $$</div>
+<p>注意，令 <span class="math-inline">$\tau \to 0$</span> 会使 v 的最大元素占据主导，softmax 的输出变成一个集中在该最大元素上的 one-hot 向量。</p>
+<p>其次，另一个技巧是核采样（nucleus）或 top-p 采样，我们通过截断低概率 token 来修改采样分布。设 q 是我们从（经过温度缩放的）大小为 vocab_size 的 softmax 得到的概率分布。超参数为 p 的核采样按下式产生下一个 token：</p>
+<div class="math-display">$$ P(x_{t+1}=i \mid q) = \begin{cases} \frac{q_i}{\sum_{j \in V(p)} q_j} & \text{若 } i \in V(p) \\ 0 & \text{否则} \end{cases} $$</div>
+<p>其中 <span class="math-inline">$V(p)$</span> 是满足 <span class="math-inline">$\sum_{j \in V(p)} q_j \geq p$</span> 的最小索引集合。你可以通过先把概率分布 q 按大小排序，然后选择最大的词汇表元素直到达到目标水平 p，来轻松计算这个量。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>decoding</code>）：解码（3 分）</strong></div>
+<p>提交内容：实现一个从你的语言模型解码的函数。我们建议你支持以下功能：</p>
+<ul><li>为用户提供的 prompt 生成补全（即接收某个 <span class="math-inline">$x_{1...t}$</span> 并采样一个补全，直到命中 &lt;|endoftext|&gt; token）。</li><li>允许用户控制生成的最大 token 数。</li><li>给定一个期望的温度值，在采样前对预测的下一个 token 分布应用 softmax 温度缩放。</li><li>Top-p 采样（[A. Holtzman et al., 2020]，也称为核采样），给定一个用户指定的阈值。</li></ul>
+</div>
+<h2 id="7">7 实验</h2>
+<p>现在是把所有东西放在一起、在一个预训练数据集上训练（小型）语言模型的时候了。</p>
+<h3 id="7-1">7.1 如何运行实验与提交内容</h3>
+<p>理解 Transformer 架构组件背后原理的最好方式，就是实际修改它并自己运行。亲自动手的经验无可替代。</p>
+<p>为此，能够快速、一致地做实验并记录你所做的工作是很重要的。为了快速实验，我们会在一个小规模模型（总计约 17M 参数）和简单数据集（TinyStories）上运行许多实验。为了保持一致性，你要系统地消融组件、改变超参数；为了记录，我们会要求你提交一份实验日志以及与每个实验相关的学习曲线。</p>
+<p>为了能够提交损失曲线，务必定期评估验证损失，并记录步数和墙钟时间。你可能会发现 Weights and Biases 这样的日志基础设施很有帮助。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>experiment_log</code>）：实验日志（3 分）</strong></div>
+<p>为你的训练和评估代码创建实验跟踪基础设施，使你能够跟踪实验和损失曲线（相对于梯度步数和墙钟时间）。</p>
+<p>提交内容：用于实验的日志基础设施代码，以及一份实验日志（记录你所尝试的所有事情），针对本节下面各作业问题。</p>
+</div>
+<h3 id="7-2">7.2 TinyStories</h3>
+<p>我们从一个非常简单的数据集（TinyStories；[R. Eldan et al. 1]）开始，模型会在上面快速训练，我们也能看到一些有趣的行为。获取该数据集的说明在第 1 节。下面是一个该数据集长什么样的例子。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>tinystories_example</code>）：TinyStories 中的一个例子</strong></div>
+<p>Once upon a time there was a little boy named Ben. Ben loved to explore the world around him. He saw many amazing things, like beautiful vases that were on display in a store. One day, Ben was walking through the store when he came across a very special vase. When Ben saw it he was amazed! He said, &quot;Wow, that is a really amazing vase! Can I buy it?&quot; The shopkeeper smiled and said, &quot;Of course you can. You can take it home and show all your friends how amazing it is!&quot; So Ben took the vase home and he was so proud of it! He called his friends over and showed them the amazing vase. All his friends thought the vase was beautiful and couldn&#x27;t believe how lucky Ben was. And that&#x27;s how Ben found an amazing vase in the store!</p>
+</div>
+<h4 id="7-2-1">7.2.1 超参数调整</h4>
+<p>我们会给你一些非常基础的起始超参数，并让你为其他一些超参数找到效果好的设置。</p>
+<p>词表大小（Vocab size）10000。典型的词表大小在几万到几十万之间。你应该改变这个值，看看词表和模型行为如何变化。</p>
+<p>上下文长度（Context length）256。像 TinyStories 这样的简单数据集可能不需要很长的序列长度，但对于后面的 OpenWebText 数据，你可能想改变这个值。试着改变它，看看对每次迭代的运行时间和最终困惑度的影响。</p>
+<p>d_model 512。这比许多小型 Transformer 论文中使用的 768 维略小，但这样会更快。</p>
+<p>d_ff 1344。这大约是 <span class="math-inline">$\frac{8}{3}d_{model}$</span>，同时是 64 的倍数，有利于 GPU 性能。RoPE theta 参数 <span class="math-inline">$\Theta$</span> 10000。</p>
+<p>层数和头数：4 层、16 头。加在一起大约有 17M 非嵌入参数，这是一个相当小的 Transformer。</p>
+<p>处理的总 token 数 327,680,000（你的批量大小 × 总步数 × 上下文长度应大致等于这个值）。</p>
+<p>你应该通过反复试验，为下面这些其他超参数找到好的默认值：</p>
+<p>学习率、学习率预热、其他 AdamW 超参数（<span class="math-inline">$\beta_1, \beta_2, \varepsilon$</span>）和权重衰减。你可以在 [D. P. Kingma et al. 22] 中找到这些超参数的一些典型选择。</p>
+<h4 id="7-2-2">7.2.2 组合到一起</h4>
+<p>现在你可以把所有东西组合起来了：获取一个训练好的 BPE 分词器，对训练数据集分词，并在你编写的训练循环中运行它。重要提示：如果你的实现正确且高效，上述超参数在 1 块 B200 GPU 上应得到大约 20–30 分钟的运行时间。如果你的运行时间要长得多，请检查并确保你的数据加载、检查点或验证损失代码没有成为运行时间的瓶颈，并且你的实现已经正确地批处理。</p>
+<h4 id="7-2-3">7.2.3 调试模型架构的技巧</h4>
+<p>我们强烈建议你熟悉 IDE 内置的调试器（例如 VSCode/Zed），这会比用 print 语句调试节省时间。如果你用文本编辑器，可以使用 ipdb 之类的工具。调试模型架构时的其他一些好习惯有：</p>
+<ul><li>开发任何神经网络架构时，常见的第一步是过拟合到单个 minibatch。如果你的实现正确，你应该能很快把训练损失降到接近零。</li><li>在各种模型组件中设置调试断点，检查中间张量的形状，确保它们符合你的预期。</li><li>监控激活值、模型权重和梯度的范数，确保它们没有爆炸或消失。</li></ul>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>learning_rate</code>）：调整学习率（2 B200 小时）（3 分）</strong></div>
+<p>学习率是最需要调整的超参数之一。以你训练好的基础模型为例，回答以下问题：</p>
+<p>(a) 对学习率进行超参数扫描，并报告最终损失（如果优化器发散则注明发散）。</p>
+<p>提交内容：与多个学习率相关的学习曲线。解释你的超参数搜索策略。</p>
+<p>提交内容：一个在 TinyStories 上验证损失（每 token）至多为 1.45 的模型。</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：在 CPU 或 Apple Silicon 上训练几步</strong></div>
+<p>如果你在 cpu 或 mps 上运行，你应该把总处理 token 数减少到 40,000,000，这足以产生相当流畅的文本。你也可以把目标验证损失从 1.45 提高到 2.00。</p>
+<p>用我们的参考实现代码，在 M4 Max 芯片和 36 GB 内存上以调好学习率运行，我们使用批量大小 × 总步数 × 上下文长度 = 32 × 5000 × 256 = 40,960,000 token，在 cpu 上耗时 1 小时 22 分钟，在 mps 上耗时 36 分钟。在第 5000 步，我们达到 1.80 的验证损失。</p>
+<p>一些额外的提示：</p>
+<ul><li>当使用 N 步训练时，我们建议调整余弦学习率衰减调度，使其衰减（即达到最小学习率）恰好终止在第 N 步。</li><li>当使用 mps 时，不要使用 TF32 内核，即不要像在 cuda 设备上那样设置</li></ul>
+<pre class="codeblock"><code>torch<span style="color: #D73948">.</span>set_float32_matmul_precision<span style="color: #000">(</span><span style="color: #198810">'high'</span><span style="color: #000">)</span>
+</code></pre>
+<p>我们尝试过在 mps（torch 版本 2.9.0）上启用 TF32 内核，发现后端有时会使用静默损坏的内核，导致训练不稳定。</p>
+<ul><li>你可以通过用 torch.compile JIT 编译你的模型来加速训练。具体来说：</li></ul>
+<p>在 cpu 上，用以下方式编译你的模型：</p>
+<pre class="codeblock"><code>model <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>compile<span style="color: #000">(</span>model<span style="color: #000">)</span>
+</code></pre>
+<p>在 mps 上，你可以用以下方式在一定程度上优化反向传播：</p>
+<pre class="codeblock"><code>model <span style="color: #D73948">=</span> torch<span style="color: #D73948">.</span>compile<span style="color: #000">(</span>model<span style="color: #000">,</span> backend<span style="color: #D73948">=</span><span style="color: #198810">"aot_eager"</span><span style="color: #000">)</span>
+</code></pre>
+<p>在 mps 上，截至 torch 版本 2.9.0，不支持用 Inductor 编译。</p>
+<p>(b) 民间智慧认为，最佳学习率「处于稳定性边缘」。研究学习率开始发散的点与你最佳学习率的关系。</p>
+<p>提交内容：学习率递增的学习曲线，至少包含一次发散的运行，并分析这与收敛率的关系。</p>
+<p>现在让我们改变批量大小，看看训练会发生什么。批量大小很重要——它们让我们通过更大的矩阵乘法从 GPU 获得更高效率，但我们真的总是希望批量大小很大吗？让我们跑一些实验来找出答案。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>batch_size_experiment</code>）：批量大小变化（1 B200 小时）（1 分）</strong></div>
+<p>把批量大小从 1 一直变化到 GPU 内存上限。中间至少尝试几个批量大小，包括 64 和 128 这样的典型大小。</p>
+<p>提交内容：不同批量大小运行的学习曲线。如有必要，应重新优化学习率。</p>
+<p>提交内容：几句话，讨论你关于批量大小及其对训练影响的发现。</p>
+<p>有了解码器，我们现在可以生成文本了！我们将从模型生成文本，看看它有多好。作为参考，你应该得到看起来至少和下面例子一样好的输出。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>ts_generate_example</code>）：TinyStories 语言模型的样本输出</strong></div>
+<p>Once upon a time, there was a pretty girl named Lily. She loved to eat gum, especially the big black one. One day, Lily&#x27;s mom asked her to help cook dinner. Lily was so excited! She loved to help her mom. Lily&#x27;s mom made a big pot of soup for dinner. Lily was so happy and said, &quot;Thank you, Mommy! I love you.&quot; She helped her mom pour the soup into a big bowl. After dinner, Lily&#x27;s mom made some yummy soup. Lily loved it! She said, &quot;Thank you, Mommy! This soup is so yummy!&quot; Her mom smiled and said, &quot;I&#x27;m glad you like it, Lily.&quot; They finished cooking and continued to cook together. The end.</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：在 CPU 或 Apple Silicon 上生成文本</strong></div>
+<p>如果你使用的是处理了 40M token 的低资源配置，你应该会看到仍然像英语、但不如上面那样流畅的生成结果。例如，我们在 40M token 上训练的 TinyStories 语言模型的样本输出如下：</p>
+<p>Once upon a time, there was a little girl named Sue. Sue had a tooth that she loved very much. It was his best head. One day, Sue went for a walk and met a ladybug! They became good friends and played on the path together.</p>
+<p>&quot;Hey, Polly! Let&#x27;s go out!&quot; said Tim. Sue looked at the sky and saw that it was difficult to find a way to dance shining. She smiled and agreed to help the talking!&quot;</p>
+<p>As Sue watched the sky moved, what it was. She</p>
+<p>下面是精确的问题陈述和我们要求的内容：</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>generate</code>）：生成文本（1 分）</strong></div>
+<p>使用你的解码器和训练好的检查点，报告你的模型生成的文本。你可能需要调整解码器参数（temperature、top-p 等）来获得流畅的输出。</p>
+<p>提交内容：至少 256 个 token 的文本转储（或直到第一个 &lt;|endoftext|&gt; token），并简要评论该输出的流畅性，以及至少两个影响该输出好坏的因素。</p>
+</div>
+<h3 id="7-3">7.3 消融与架构修改</h3>
+<p>理解 Transformer 的最好方式是实际修改它，看看它如何表现。现在我们将做一些简单的消融和修改。</p>
+<h5>消融 1：层归一化</h5>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>layer_norm_ablation</code>）：移除 RMSNorm 并训练（0.5 B200 小时）（1 分）</strong></div>
+<p>人们常说层归一化对 Transformer 训练的稳定性很重要。但也许我们想活得危险一点。让我们从每个 Transformer 块中移除 RMSNorm，看看会发生什么。</p>
+<p>从你的 Transformer 中移除所有 RMSNorm 并训练。在之前的理想学习率下会发生什么？你能通过使用更低的学习率获得稳定性吗？</p>
+<p>提交内容：一条移除 RMSNorm 并训练时的学习曲线，以及一条最佳学习率下的学习曲线。</p>
+<p>提交内容：几句话，评论 RMSNorm 的影响。</p>
+<p>现在让我们研究另一个乍一看很随意的层归一化选择。Pre-norm Transformer 块定义为</p>
+<div class="math-display">$$ z = x + \mathrm{MultiHeadSelfAttention}(\mathrm{RMSNorm}(x)) $$</div>
+<div class="math-display">$$ y = z + \mathrm{FFN}(\mathrm{RMSNorm}(z)). $$</div>
+<p>这是对原始 Transformer 架构为数不多的「共识性」修改之一，原始架构使用 post-norm 方式：</p>
+<div class="math-display">$$ z = \mathrm{RMSNorm}(x + \mathrm{MultiHeadSelfAttention}(x)) $$</div>
+<div class="math-display">$$ y = \mathrm{RMSNorm}(z + \mathrm{FFN}(z)). $$</div>
+<p>让我们改回 post-norm 方式，看看会发生什么。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>pre_norm_ablation</code>）：实现 post-norm 并训练（0.5 B200 小时）（1 分）</strong></div>
+<p>把你的 pre-norm Transformer 实现修改为 post-norm 版本。用 post-norm 模型训练，看看会发生什么。</p>
+<p>提交内容：一条 post-norm Transformer 的学习曲线，与 pre-norm 的对比。</p>
+<p>我们看到层归一化对 Transformer 的行为有重大影响，而且即使层归一化的位置也很重要。</p>
+</div>
+<h5>消融 2：位置嵌入</h5>
+<p>接下来我们将研究位置嵌入对模型性能的影响。具体来说，我们将比较我们的基础模型（带 RoPE）与完全不包含位置嵌入（NoPE）的情况。事实证明，decoder-only Transformer（即像我们实现的那样带因果掩码的 Transformer）理论上可以在不显式提供位置嵌入的情况下推断出相对或绝对位置信息 [Y.-H. H. Tsai et al., 2019; A. Kazemnejad et al., 2023]。现在我们将实证测试 NoPE 与 RoPE 相比表现如何。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>no_pos_emb</code>）：实现 NoPE（0.5 B200 小时）（1 分）</strong></div>
+<p>修改你带 RoPE 的 Transformer 实现，完全移除位置嵌入信息，看看会发生什么。</p>
+<p>提交内容：一条比较 RoPE 与 NoPE 性能的学习曲线。</p>
+</div>
+<h5>消融 3：SwiGLU vs. SiLU</h5>
+<p>接下来，我们将遵循 [N. Shazeer 20]，通过比较 SwiGLU 前馈网络与使用 SiLU 激活但无门控线性单元（GLU）的前馈网络的性能，来测试前馈网络中门控的重要性：</p>
+<div class="math-display">$$ \mathrm{FFN}_{\mathrm{SiLU}}(x) = W_2 \mathrm{SiLU}(W_1 x). $$</div>
+<p>回顾一下，在我们的 SwiGLU 实现中，我们把内层前馈层的维度设为大约 <span class="math-inline">$d_{ff} = \frac{8}{3}d_{model}$</span>（同时确保 <span class="math-inline">$d_{ff} \mod 64 = 0$</span>，以利用 GPU tensor core）。在这个消融基线中，你的 FFN<span class="math-inline">$_{SiLU}$</span> 实现应改为设 <span class="math-inline">$d_{ff} = 4 \times d_{model}$</span>，以大致匹配默认 SwiGLU 前馈网络的参数数量（它有三个而非两个权重矩阵）。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>swiglu_ablation</code>）：SwiGLU vs. SiLU（0.5 B200 小时）（1 分）</strong></div>
+<p>提交内容：一条比较 SwiGLU 与 SiLU 前馈网络性能的学习曲线，参数数量大致匹配。</p>
+<p>提交内容：几句话，讨论你的发现。</p>
+</div>
+<div class="box box-blue">
+<div class="box-title"><strong>低资源提示：GPU 资源有限的线上学生应在 TinyStories 上测试修改</strong></div>
+<p>在作业的剩余部分，我们将转向一个更大规模、噪声更多的网络数据集（OpenWebText），做架构修改实验，并（可选地）向课程排行榜提交。</p>
+<p>在 OpenWebText 上把 LM 训练到流畅需要很长时间，所以我们建议 GPU 访问有限的线上学生继续在 TinyStories 上测试修改（用验证损失作为评估性能的指标）。</p>
+</div>
+<h3 id="7-4">7.4 在 OpenWebText 上运行</h3>
+<p>现在我们将转向一个更标准的、由网络爬虫创建的预训练数据集。OpenWebText [A. Gokaslan et al., 2019] 的一个小样本也作为单个文本文件提供：访问方式见第 1 节。</p>
+<p>下面是一个来自 OpenWebText 的例子。注意文本要真实、复杂、多样得多。你可能想浏览一下训练数据集，了解网络抓取语料的训练数据长什么样。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>示例（<code>owt_example</code>）：OpenWebText 中的一个例子</strong></div>
+<p>Baseball Prospectus director of technology Harry Pavlidis took a risk when he hired Jonathan Judge.</p>
+<p>Pavlidis knew that, as Alan Schwarz wrote in The Numbers Game, &quot;no corner of American culture is more precisely counted, more passionately quantified, than performances of baseball players.&quot; With a few clicks here and there, you can find out that Noah Syndergaard&#x27;s fastball revolves more than 2,100 times per minute on its way to the plate, that Nelson Cruz had the game&#x27;s highest average exit velocity among qualified hitters in 2016 and myriad other tidbits that seem ripped from a video game or science fiction novel. The rising ocean of data has empowered an increasingly important actor in baseball&#x27;s culture: the analytical hobbyist.</p>
+<p>That empowerment comes with added scrutiny – on the measurements, but also on the people and publications behind them. With Baseball Prospectus, Pavlidis knew all about the backlash that accompanies quantitative imperfection. He also knew the site&#x27;s catching metrics needed to be reworked, and that it would take a learned mind – someone who could tackle complex statistical modeling problems – to complete the job.</p>
+<p>&quot;He freaks us out.&quot; Harry Pavlidis</p>
+<p>Pavlidis had a hunch that Judge &quot;got it&quot; based on the latter&#x27;s writing and their interaction at a site-sponsored ballpark event. [...]</p>
+<p>注意：对于这个实验，你可能需要重新调整学习率或批量大小等超参数。</p>
+</div>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>main_experiment</code>）：在 OWT 上实验（2 B200 小时）（2 分）</strong></div>
+<p>用与 TinyStories 相同的模型架构和总训练迭代次数，在 OpenWebText 上训练你的语言模型。这个模型表现如何？</p>
+<p>提交内容：你的语言模型在 OpenWebText 上的学习曲线。描述与 TinyStories 损失的差异——我们应该如何解读这些损失？</p>
+<p>提交内容：来自 OpenWebText LM 的生成文本，格式与 TinyStories 输出相同。这些文本的流畅度如何？为什么我们用了与 TinyStories 相同的模型和计算预算，输出质量却更差？</p>
+</div>
+<h3 id="7-5">7.5 你自己的修改 + 排行榜</h3>
+<p>恭喜你走到这一步。你差不多完成了！现在你将尝试改进 Transformer 架构，看看你的超参数和架构与班上其他同学相比如何。</p>
+<p>排行榜规则</p>
+<p>除了以下几点，没有其他限制：</p>
+<p>运行时间：你的提交在一台 B200 上最多运行 45 分钟。如果你使用 SLURM 或 Modal，你可能想在提交脚本中强制执行这一点。</p>
+<p>数据：你只能使用我们提供的 OpenWebText 训练数据集。</p>
+<p>除此之外，你可以随心所欲。</p>
+<p>如果你想找一些可以实现的点子，可以查看以下这些资源：</p>
+<ul><li>最先进的开源 LLM 家族，如 Llama 3 [A. Grattafiori et al., 2024] 或 Qwen 2.5 [A. Yang et al., 2024]。</li><li>NanoGPT speedrun 仓库（github.com/KellerJordan/modded-nanogpt），社区成员在那里发布了许多用于「速通」小规模语言模型预训练的有趣修改。例如，一个可以追溯到原始 Transformer 论文的常见修改是把输入和输出嵌入的权重绑定（weight tying）在一起（见 [A. Vaswani et al. 8] 第 3.4 节和 [A. Chowdhery et al. 16] 第 2 节）。如果你确实尝试权重绑定，你可能需要降低 embedding/LM head 初始化的标准差。</li></ul>
+<p>在尝试完整的 45 分钟运行之前，你应该先在 OpenWebText 的一个小子集或 TinyStories 上测试这些修改。</p>
+<p>作为提醒，我们确实注意到，你在这个排行榜上可能发现有效的一些修改，可能无法泛化到更大规模的预训练。我们将在课程的 scaling laws 单元进一步探讨这一想法。</p>
+<div class="box box-orange">
+<div class="box-title"><strong>问题（<code>leaderboard</code>）：排行榜（10 B200 小时）（6 分）</strong></div>
+<p>你将在上述排行榜规则下训练一个模型，目标是在 0.75 B200 小时内最小化你的语言模型的验证损失。</p>
+<p>提交内容：记录到的最终验证损失、一条清楚显示墙钟时间 x 轴小于 45 分钟的相关学习曲线，以及对你所做工作的描述。我们期望排行榜提交至少能击败 5.0 损失的朴素基线。在这里提交到排行榜：github.com/stanford-cs336/assignment1-basics-leaderboard。</p>
+</div>
+<h3 id="sec-2">参考文献</h3>
+<p class="ref">[1] R. Eldan and Y. Li, &quot;TinyStories: How Small Can Language Models Be and Still Speak Coherent English?&quot; 2023.</p>
+<p class="ref">[2] A. Gokaslan, V. Cohen, E. Pavlick, and S. Tellex, &quot;OpenWebText corpus.&quot; 2019.</p>
+<p class="ref">[3] R. Sennrich, B. Haddow, and A. Birch, &quot;Neural Machine Translation of Rare Words with Subword Units,&quot; in Proc. of ACL, 2016.</p>
+<p class="ref">[4] C. Wang, K. Cho, and J. Gu, &quot;Neural Machine Translation with Byte-Level Subwords.&quot; 2019.</p>
+<p class="ref">[5] P. Gage, &quot;A new algorithm for data compression,&quot; C Users Journal, vol. 12, no. 2, pp. 23–38, Feb. 1994.</p>
+<p class="ref">[6] A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, and I. Sutskever, &quot;Language Models are Unsupervised Multitask Learners.&quot; 2019.</p>
+<p class="ref">[7] A. Radford, K. Narasimhan, T. Salimans, and I. Sutskever, &quot;Improving Language Understanding by Generative Pre-Training.&quot; 2018.</p>
+<p class="ref">[8] A. Vaswani et al., &quot;Attention is All you Need,&quot; in Proc. of NeurIPS, 2017.</p>
+<p class="ref">[9] T. Q. Nguyen and J. Salazar, &quot;Transformers without Tears: Improving the Normalization of Self-Attention,&quot; in Proc. of IWSLT, 2019.</p>
+<p class="ref">[10] R. Xiong et al., &quot;On Layer Normalization in the Transformer Architecture,&quot; in Proc. of ICML, 2020.</p>
+<p class="ref">[11] J. L. Ba, J. R. Kiros, and G. E. Hinton, &quot;Layer Normalization.&quot; 2016.</p>
+<p class="ref">[12] H. Touvron et al., &quot;LLaMA: Open and Efficient Foundation Language Models.&quot; 2023.</p>
+<p class="ref">[13] B. Zhang and R. Sennrich, &quot;Root Mean Square Layer Normalization,&quot; in Proc. of NeurIPS, 2019.</p>
+<p class="ref">[14] A. Grattafiori et al., &quot;The Llama 3 Herd of Models.&quot; [Online]. Available: <a href="https://arxiv.org/abs/2407.21783">https://arxiv.org/abs/2407.21783</a></p>
+<p class="ref">[15] A. Yang et al., &quot;Qwen2.5 Technical Report,&quot; arXiv preprint arXiv:2412.15115, 2024.</p>
+<p class="ref">[16] A. Chowdhery et al., &quot;PaLM: Scaling Language Modeling with Pathways.&quot; 2022.</p>
+<p class="ref">[17] D. Hendrycks and K. Gimpel, &quot;Bridging Nonlinearities and Stochastic Regularizers with Gaussian Error Linear Units.&quot; 2016.</p>
+<p class="ref">[18] S. Elfwing, E. Uchibe, and K. Doya, &quot;Sigmoid-Weighted Linear Units for Neural Network Function Approximation in Reinforcement Learning.&quot; [Online]. Available: <a href="https://arxiv.org/abs/1702.03118">https://arxiv.org/abs/1702.03118</a></p>
+<p class="ref">[19] Y. N. Dauphin, A. Fan, M. Auli, and D. Grangier, &quot;Language Modeling with Gated Convolutional Networks.&quot; [Online]. Available: <a href="https://arxiv.org/abs/1612.08083">https://arxiv.org/abs/1612.08083</a></p>
+<p class="ref">[20] N. Shazeer, &quot;GLU Variants Improve Transformer.&quot; 2020.</p>
+<p class="ref">[21] J. Su, Y. Lu, S. Pan, B. Wen, and Y. Liu, &quot;RoFormer: Enhanced Transformer with Rotary Position Embedding.&quot; 2021.</p>
+<p class="ref">[22] D. P. Kingma and J. Ba, &quot;Adam: A Method for Stochastic Optimization,&quot; in Proc. of ICLR, 2015.</p>
+<p class="ref">[23] I. Loshchilov and F. Hutter, &quot;Decoupled Weight Decay Regularization,&quot; in Proc. of ICLR, 2019.</p>
+<p class="ref">[24] T. B. Brown et al., &quot;Language Models are Few-Shot Learners,&quot; in Proc. of NeurIPS, 2020.</p>
+<p class="ref">[25] J. Kaplan et al., &quot;Scaling Laws for Neural Language Models.&quot; 2020.</p>
+<p class="ref">[26] J. Hoffmann et al., &quot;Training Compute-Optimal Large Language Models.&quot; 2022.</p>
+<p class="ref">[27] A. Holtzman, J. Buys, L. Du, M. Forbes, and Y. Choi, &quot;The Curious Case of Neural Text Degeneration,&quot; in Proc. of ICLR, 2020.</p>
+<p class="ref">[28] Y.-H. H. Tsai, S. Bai, M. Yamada, L.-P. Morency, and R. Salakhutdinov, &quot;Transformer Dissection: An Unified Understanding for Transformer&#x27;s Attention via the Lens of Kernel,&quot; in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP), K. Inui, J. Jiang, V. Ng, and X. Wan, Eds., Hong Kong, China: Association for Computational Linguistics, Nov. 2019, pp. 4344–4353. doi: 10.18653/v1/D19-1443.</p>
+<p class="ref">[29] A. Kazemnejad, I. Padhi, K. Natesan, P. Das, and S. Reddy, &quot;The Impact of Positional Encoding on Length Generalization in Transformers,&quot; in Thirty-seventh Conference on Neural Information Processing Systems, 2023. [Online]. Available: <a href="https://openreview.net/forum?id=Drrl2gcjzl">https://openreview.net/forum?id=Drrl2gcjzl</a></p>
+</div>
+<script>
+(function () {
+  function setToc(hidden) {
+    document.body.classList.toggle('toc-hidden', hidden);
+  }
+  var closeBtn = document.getElementById('toc-close');
+  var toggleBtn = document.getElementById('toc-toggle');
+  if (closeBtn) closeBtn.addEventListener('click', function () { setToc(true); });
+  if (toggleBtn) toggleBtn.addEventListener('click', function () { setToc(false); });
+})();
+</script>
+</body>
+</html>
