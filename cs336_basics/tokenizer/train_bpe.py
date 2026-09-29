@@ -2,6 +2,7 @@ from cs336_basics.pretokenization_example import find_chunk_boundaries
 import regex as re
 import os
 from cs336_basics.tokenizer.tokenizer import Tokenizer
+import time
 
 #=====预分词=====
 
@@ -106,7 +107,12 @@ def merge(
     merge_num: int,
 ) -> list[tuple[bytes, bytes]]:
     merge_re = []
+    start_time = time.perf_counter()
     for i in range(merge_num):
+        if i % 100 == 0:
+            ti = time.perf_counter() - start_time
+            print(f"已经合并{i}次, 当前bpe训练时间已有 {ti} 秒")
+
         mx_pb = get_max(count)
         merge_re.append(mx_pb)
 

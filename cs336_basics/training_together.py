@@ -3,25 +3,27 @@ from cs336_basics.train_data import data_loading, checkpointing
 from cs336_basics.transformer import transformer_lm
 from cs336_basics.train import adamw, cross_entropy, gradient_clipping, learning_rate_schedule
 from cs336_basics.config import CONFIG
-from cs336_basics.config import text_path, base_path, vocab_path, merges_path, best_model_save_path, latest_mode_save_path, config_path, log_path
-from cs336_basics.config import final_best_model_save_path, final_config_path, final_latest_mode_save_path, final_log_path
+from cs336_basics.config import train_path, val_path, base_path, vocab_path, merges_path, best_model_save_path, latest_mode_save_path, config_path, log_path
+from cs336_basics.config import final_base_path, final_best_model_save_path, final_config_path, final_latest_mode_save_path, final_log_path
 
 import torch
 import shutil
 import time
 
+torch.set_float32_matmul_precision("high")
+
 base_path.mkdir(parents=True, exist_ok=True)
+final_base_path.mkdir(parents=True, exist_ok=True)
 
 # ===== 划分数据集 =====
-with open(text_path, "r") as f:
-    text = f.read()
-l = int(len(text) * 0.9)
-train_text = text[:l]
-val_text = text[l:]
+with open(train_path, "r") as f:
+    train_text = f.read()
+with open(val_path, "r") as f:
+    val_text = f.read()
 
 # ===== 加载/训练bpe =====
 tk = bpe_loading.get_tokenizer(
-    train_text, 
+    train_path, 
     vocab_path=vocab_path, 
     merges_path=merges_path
 )
@@ -134,7 +136,7 @@ for step in range(CONFIG["total_steps"]):
         lrList.append((step, lr))
         print(f"step: {step:>6d} | run_time: {ti:>10.4f} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f} | ti: {ti:>6.4f}")
 
-    if step % 500 == 0:
+    if step % 500 == 0 or step == CONFIG["total_steps"]:
         # ===== 保存检查点 =====
         checkpointing.save_checkpoint(model, optimizer, step, latest_mode_save_path)
         # 保存在验证集上评估最好时的权重参数

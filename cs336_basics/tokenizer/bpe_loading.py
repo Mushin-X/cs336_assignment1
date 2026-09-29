@@ -23,26 +23,21 @@ def save_bpe(vocab, vocab_path, merges, merges_path):
             f.write(f"{a.hex()} {b.hex()}\n")
 
 def get_tokenizer(
-    text=None,
+    text_path=None,
     vocab_path=None, 
     merges_path=None
 ):
-    if text is None and final_vocab_path.exists() and final_merges_path.exists():
+    if final_vocab_path.exists() and final_merges_path.exists():
         print("直接加载已训好的 BPE 数据")
         vocab, merges = load_bpe(final_vocab_path, final_merges_path)
     else:
-        if text is None:
+        if text_path is None:
             raise ValueError("没有传入BPE训练文本, 无法训练")
-
-        bpe_trainText_path = Path("model_data/bpe_train.txt")
-        with open(bpe_trainText_path, "w", encoding="utf-8") as f:
-            f.write(text)
 
         print("开始训练 BPE ")
         vocab, merges = train_bpe.run_train_bpe(
-            bpe_trainText_path, CONFIG["vocab_size"], special_tokens
+            text_path, CONFIG["vocab_size"], special_tokens
         )
-        bpe_trainText_path.unlink()
 
         save_bpe(vocab, vocab_path, merges, merges_path)
         save_bpe(vocab, final_vocab_path, merges, final_merges_path)

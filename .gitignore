@@ -167,5 +167,8 @@ make_submission.sh
 
 data/*
 experiments/*
+!experiments/完整训练
 
-model_data/
+model_data/*
+!model_data/merges.txt
+!model_data/vocab.jsonexperiments/完整训练/*.pt
