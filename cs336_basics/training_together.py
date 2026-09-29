@@ -121,6 +121,7 @@ for step in range(CONFIG["total_steps"]):
         # 保存在验证集上评估最好时的权重参数
         if loss_val < mi_valLoss:
             checkpointing.save_checkpoint(model, optimizer, step, best_model_save_path)
+            mi_valLoss = loss_val
         
 shutil.copyfile("cs336_basics/config.py", config_path)
 with open(log_path, "w", encoding="utf-8") as f:
