@@ -1,8 +1,17 @@
 from cs336_basics.transformer import transformer_lm, softmax
 from cs336_basics.train_data import checkpointing, data_loading
 from cs336_basics.tokenizer import bpe_loading
-from cs336_basics.config import CONFIG, best_model_save_path
+from cs336_basics.config import CONFIG
 import torch
+from pathlib import Path
+
+experiment_path = Path("experiments")
+experiment_path = max(Path("experiments").iterdir())
+print(f"执行的是 \"{experiment_path}\" 路径下存储的数据")
+
+vocab_path = experiment_path / "vocab.json"
+merges_path = experiment_path / "merges.txt"
+model_path = experiment_path / "best_model_save.pt"
 
 @torch.no_grad()
 def generate_next_token(input: list[int], temperatrue, top_p) -> int:
@@ -31,7 +40,7 @@ def generate_text(input: str, max_len, temperatrue, top_p) -> str:
     if max_len == 0:
         return input
 
-    tk = bpe_loading.get_tokenizer()
+    tk = bpe_loading.get_tokenizer(vocab_path=vocab_path, merges_path=merges_path)
     ids = tk.encode(input)
 
     for i in range(max_len):
@@ -52,7 +61,7 @@ model = transformer_lm.TransformerLm(
     CONFIG["d_ff"],
     CONFIG["rope_theta"],
 ).to(CONFIG["device"])
-checkpointing.load_checkpoint(best_model_save_path, model)
+checkpointing.load_checkpoint(model_path, model)
 
 input_text = "Hello, the weather looks very nice today, I plan to"
 print(generate_text(input_text, max_len=500, temperatrue=0.8, top_p=0.9))

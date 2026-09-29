@@ -2,9 +2,12 @@ from cs336_basics.tokenizer import bpe_loading
 from cs336_basics.train_data import data_loading, checkpointing
 from cs336_basics.transformer import transformer_lm
 from cs336_basics.train import adamw, cross_entropy, gradient_clipping, learning_rate_schedule
-from cs336_basics.config import CONFIG, text_path, best_model_save_path, latest_mode_save_path
+from cs336_basics.config import CONFIG, text_path, base_path, vocab_path, merges_path, best_model_save_path, latest_mode_save_path, config_path, log_path
 
 import torch
+import shutil
+
+base_path.mkdir(parents=True, exist_ok=True)
 
 # ===== 划分数据集 =====
 with open(text_path, "r") as f:
@@ -14,7 +17,12 @@ train_text = text[:l]
 val_text = text[l:]
 
 # ===== 加载/训练bpe =====
-tk = bpe_loading.get_tokenizer(train_text, is_retrain=True)
+tk = bpe_loading.get_tokenizer(
+    train_text, 
+    is_retrain=True, 
+    vocab_path=vocab_path, 
+    merges_path=merges_path
+)
 
 # ===== 生成数据集生成器 =====
 train_data = data_loading.DataLoading(
@@ -77,6 +85,7 @@ def evaluate(is_trainData=True):
 # ===== 训练 ======
 model.train()
 mi_valLoss = 1e9
+lossTr, lossVal = [], []
 for step in range(CONFIG["total_steps"]):
     inputs, targets = train_data.get_batch()
     out = model(inputs)
@@ -99,14 +108,21 @@ for step in range(CONFIG["total_steps"]):
         g["lr"] = lr
     optimizer.step()
 
-    if step % 100 == 0 or step == CONFIG["total_steps"] - 1:
+    step += 1
+    if step % 50 == 0 or step == CONFIG["total_steps"]:
         loss_tr = evaluate(is_trainData=True)
         loss_val = evaluate(is_trainData=False)
+        lossTr.append((step, loss_tr))
+        lossVal.append((step, loss_val))
         print(f"step: {step:>6d} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f}")
 
         # ===== 保存检查点 =====
-        checkpointing.save_checkpoint(model, optimizer, step+1, latest_mode_save_path)
+        checkpointing.save_checkpoint(model, optimizer, step, latest_mode_save_path)
         # 保存在验证集上评估最好时的权重参数
         if loss_val < mi_valLoss:
-            checkpointing.save_checkpoint(model, optimizer, step+1, best_model_save_path)
+            checkpointing.save_checkpoint(model, optimizer, step, best_model_save_path)
         
+shutil.copyfile("cs336_basics/config.py", config_path)
+with open(log_path, "w", encoding="utf-8") as f:
+    for (a1, b1), (a2, b2) in zip(lossTr, lossVal):
+        f.write(f"step: {a1:>6d} | loss_train: {b1:>8.6f} | loss_val: {b2:>8.6f}\n")

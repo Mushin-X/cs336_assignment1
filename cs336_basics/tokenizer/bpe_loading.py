@@ -1,6 +1,6 @@
 import json
 from cs336_basics.tokenizer import train_bpe, tokenizer
-from cs336_basics.config import CONFIG, special_tokens, vocab_path, merges_path
+from cs336_basics.config import CONFIG, special_tokens
 
 from pathlib import Path
 
@@ -21,7 +21,12 @@ def save_bpe(vocab, vocab_path, merges, merges_path):
         for a, b in merges:
             f.write(f"{a.hex()} {b.hex()}\n")
 
-def get_tokenizer(text=None, is_retrain=False):
+def get_tokenizer(
+    text=None, 
+    is_retrain=False, 
+    vocab_path=None, 
+    merges_path=None
+):
     if is_retrain == False and vocab_path.exists() and merges_path.exists():
         print("直接加载已训好的 BPE 数据")
         vocab, merges = load_bpe(vocab_path, merges_path)
