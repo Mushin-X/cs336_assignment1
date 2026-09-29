@@ -167,3 +167,5 @@ make_submission.sh
 
 data/*
 experiments/*
+
+model_data/

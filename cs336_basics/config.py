@@ -14,7 +14,7 @@ CONFIG = {
     "betas": (0.9, 0.95),
     "eps": 1e-8,
     "weight_decay": 0.1,
-    "total_steps": 1000,
+    "total_steps": 10000,
     "max_learning_rate": 3e-4,
     "min_learning_rate": 3e-5,
     "warmup_steps": 100,
