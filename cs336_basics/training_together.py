@@ -6,6 +6,7 @@ from cs336_basics.config import CONFIG, text_path, base_path, vocab_path, merges
 
 import torch
 import shutil
+import time
 
 base_path.mkdir(parents=True, exist_ok=True)
 
@@ -67,25 +68,28 @@ clipper = gradient_clipping.GradientClipping(
 @torch.no_grad()
 def evaluate(is_trainData=True):
     model.eval()
+    sum = 0
+    for _ in range(20):
+        if is_trainData == True:
+            data = train_data
+        else:
+            data = val_data
 
-    if is_trainData == True:
-        data = train_data
-    else:
-        data = val_data
-
-    inputs, targets = data.get_batch()
-    out = model(inputs)
-    out = out.view(-1, CONFIG["vocab_size"])
-    targets = targets.view(-1)
-    loss = cross_entropy.cross_entropy(out, targets)
+        inputs, targets = data.get_batch()
+        out = model(inputs)
+        out = out.view(-1, CONFIG["vocab_size"])
+        targets = targets.view(-1)
+        sum += cross_entropy.cross_entropy(out, targets)
 
     model.train()
-    return loss
+    return sum / 20.0
 
 # ===== 训练 ======
 model.train()
 mi_valLoss = 1e9
-lossTr, lossVal = [], []
+lossTr, lossVal, tiList, lrList = [], [], [], []
+train_start_time = time.perf_counter()
+shutil.copyfile("cs336_basics/config.py", config_path)
 for step in range(CONFIG["total_steps"]):
     inputs, targets = train_data.get_batch()
     out = model(inputs)
@@ -112,10 +116,24 @@ for step in range(CONFIG["total_steps"]):
     if step % 50 == 0 or step == CONFIG["total_steps"]:
         loss_tr = evaluate(is_trainData=True)
         loss_val = evaluate(is_trainData=False)
+        ti = time.perf_counter() - train_start_time
+
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                f"step: {step:>6d} | "
+                f"run_time: {ti:>10.4f} | "
+                f"loss_train: {loss_tr:>8.6f} | "
+                f"loss_val: {loss_val:>8.6f} | "
+                f"lr: {lr:.7f}\n"
+            )
+
         lossTr.append((step, loss_tr))
         lossVal.append((step, loss_val))
-        print(f"step: {step:>6d} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f}")
+        tiList.append((step, ti))
+        lrList.append((step, lr))
+        print(f"step: {step:>6d} | run_time: {ti:>10.4f} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f} | ti: {ti:>6.4f}")
 
+    if step % 500 == 0:
         # ===== 保存检查点 =====
         checkpointing.save_checkpoint(model, optimizer, step, latest_mode_save_path)
         # 保存在验证集上评估最好时的权重参数
@@ -123,7 +141,4 @@ for step in range(CONFIG["total_steps"]):
             checkpointing.save_checkpoint(model, optimizer, step, best_model_save_path)
             mi_valLoss = loss_val
         
-shutil.copyfile("cs336_basics/config.py", config_path)
-with open(log_path, "w", encoding="utf-8") as f:
-    for (a1, b1), (a2, b2) in zip(lossTr, lossVal):
-        f.write(f"step: {a1:>6d} | loss_train: {b1:>8.6f} | loss_val: {b2:>8.6f}\n")
+# ===== 训练过程图（补充） =====
