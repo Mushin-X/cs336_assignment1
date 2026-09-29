@@ -42,6 +42,8 @@ def get_tokenizer(
         vocab, merges = train_bpe.run_train_bpe(
             bpe_trainText_path, CONFIG["vocab_size"], special_tokens
         )
+        bpe_trainText_path.unlink()
+
         save_bpe(vocab, vocab_path, merges, merges_path)
         print(f"已完成 BPE 训练, 合并了{len(merges)}次")
 
