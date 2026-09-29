@@ -1,13 +1,13 @@
 from pathlib import Path
 
 CONFIG = {
-    "vocab_size": 512,
-    "context_length": 64,
+    "vocab_size": 1024,
+    "context_length": 128,
     "batch_size": 32,
-    "d_model": 128,
-    "num_layers": 2,
-    "num_heads": 4,
-    "d_ff": 512,
+    "d_model": 256,
+    "num_layers": 4,
+    "num_heads": 8,
+    "d_ff": 1024,
     "rope_theta": 10000,
     "device": "mps",
     "betas": (0.9, 0.95),
@@ -22,9 +22,9 @@ CONFIG = {
 
 special_tokens = ["<|endoftext|>"]
 
-bpe_trainText_path = "tests/fixtures/tinystories_sample_5M.txt"
-model_trainText_path = bpe_trainText_path
+text_path = "data/TinyStoriesV2-GPT4-valid.txt"
 
 vocab_path = Path("data/vocab.json")
 merges_path = Path("data/merges.txt")
-model_save_path = Path("data/model_save.pt")
+best_model_save_path = Path("data/best_model_save.pt")
+latest_mode_save_path = Path("data/latest_model_save.pt")

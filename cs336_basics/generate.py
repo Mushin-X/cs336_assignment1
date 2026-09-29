@@ -1,7 +1,7 @@
 from cs336_basics.transformer import transformer_lm, softmax
 from cs336_basics.train_data import checkpointing, data_loading
 from cs336_basics.tokenizer import bpe_loading
-from cs336_basics.config import CONFIG, model_save_path
+from cs336_basics.config import CONFIG, best_model_save_path
 import torch
 
 @torch.no_grad()
@@ -52,11 +52,7 @@ model = transformer_lm.TransformerLm(
     CONFIG["d_ff"],
     CONFIG["rope_theta"],
 ).to(CONFIG["device"])
-checkpointing.load_checkpoint(model_save_path, model)
+checkpointing.load_checkpoint(best_model_save_path, model)
 
 input_text = "Hello, the weather looks very nice today, I plan to"
 print(generate_text(input_text, max_len=500, temperatrue=0.8, top_p=0.9))
-
-
-
-
