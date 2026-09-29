@@ -27,7 +27,7 @@ def get_tokenizer(
     vocab_path=None, 
     merges_path=None
 ):
-    if text is None and final_vocab_path.exists() and final_merges_path.exists():
+    if final_vocab_path.exists() and final_merges_path.exists():
         print("直接加载已训好的 BPE 数据")
         vocab, merges = load_bpe(final_vocab_path, final_merges_path)
     else:

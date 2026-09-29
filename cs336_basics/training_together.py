@@ -25,6 +25,7 @@ tk = bpe_loading.get_tokenizer(
     vocab_path=vocab_path, 
     merges_path=merges_path
 )
+# tk = bpe_loading.get_tokenizer() #若 model_data中已有BPE数据，可直接获取分词器
 
 # ===== 生成数据集生成器 =====
 train_data = data_loading.DataLoading(

@@ -20,7 +20,7 @@ def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
 ) -> int:
-    data = torch.load(src)
+    data = torch.load(src, map_location="cpu") #若执行该函数的机器上，没有保存该检查点的设备（如Mac没有cuda），那么应该先指定将数据放到 cpu 上，后续再从 cpu 上到加载到模型和优化器中
     model.load_state_dict(data['model'])
     if optimizer is not None:
         optimizer.load_state_dict(data['optimizer'])
