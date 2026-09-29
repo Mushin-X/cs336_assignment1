@@ -2,7 +2,9 @@ from cs336_basics.tokenizer import bpe_loading
 from cs336_basics.train_data import data_loading, checkpointing
 from cs336_basics.transformer import transformer_lm
 from cs336_basics.train import adamw, cross_entropy, gradient_clipping, learning_rate_schedule
-from cs336_basics.config import CONFIG, text_path, base_path, vocab_path, merges_path, best_model_save_path, latest_mode_save_path, config_path, log_path
+from cs336_basics.config import CONFIG
+from cs336_basics.config import text_path, base_path, vocab_path, merges_path, best_model_save_path, latest_mode_save_path, config_path, log_path
+from cs336_basics.config import final_best_model_save_path, final_config_path, final_latest_mode_save_path, final_log_path
 
 import torch
 import shutil
@@ -20,7 +22,6 @@ val_text = text[l:]
 # ===== 加载/训练bpe =====
 tk = bpe_loading.get_tokenizer(
     train_text, 
-    is_retrain=True, 
     vocab_path=vocab_path, 
     merges_path=merges_path
 )
@@ -140,5 +141,9 @@ for step in range(CONFIG["total_steps"]):
         if loss_val < mi_valLoss:
             checkpointing.save_checkpoint(model, optimizer, step, best_model_save_path)
             mi_valLoss = loss_val
-        
+
+shutil.copyfile(best_model_save_path, final_best_model_save_path)
+shutil.copyfile(latest_mode_save_path, final_latest_mode_save_path)
+shutil.copyfile(config_path, final_config_path)
+shutil.copyfile(log_path, final_log_path)
 # ===== 训练过程图（补充） =====

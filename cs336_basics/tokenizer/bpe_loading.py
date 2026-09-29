@@ -1,6 +1,7 @@
 import json
 from cs336_basics.tokenizer import train_bpe, tokenizer
 from cs336_basics.config import CONFIG, special_tokens
+from cs336_basics.config import final_vocab_path, final_merges_path
 
 from pathlib import Path
 
@@ -22,19 +23,18 @@ def save_bpe(vocab, vocab_path, merges, merges_path):
             f.write(f"{a.hex()} {b.hex()}\n")
 
 def get_tokenizer(
-    text=None, 
-    is_retrain=False, 
+    text=None,
     vocab_path=None, 
     merges_path=None
 ):
-    if is_retrain == False and vocab_path.exists() and merges_path.exists():
+    if text is None and final_vocab_path.exists() and final_merges_path.exists():
         print("直接加载已训好的 BPE 数据")
-        vocab, merges = load_bpe(vocab_path, merges_path)
+        vocab, merges = load_bpe(final_vocab_path, final_merges_path)
     else:
         if text is None:
             raise ValueError("没有传入BPE训练文本, 无法训练")
 
-        bpe_trainText_path = Path("data/bpe_train.txt")
+        bpe_trainText_path = Path("model_data/bpe_train.txt")
         with open(bpe_trainText_path, "w", encoding="utf-8") as f:
             f.write(text)
 
@@ -45,6 +45,7 @@ def get_tokenizer(
         bpe_trainText_path.unlink()
 
         save_bpe(vocab, vocab_path, merges, merges_path)
+        save_bpe(vocab, final_vocab_path, merges, final_merges_path)
         print(f"已完成 BPE 训练, 合并了{len(merges)}次")
 
     return tokenizer.Tokenizer(vocab, merges, special_tokens)
