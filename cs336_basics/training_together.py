@@ -133,7 +133,7 @@ for step in range(CONFIG["total_steps"]):
         lossVal.append((step, loss_val))
         tiList.append((step, ti))
         lrList.append((step, lr))
-        print(f"step: {step:>6d} | run_time: {ti:>10.4f} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f} | ti: {ti:>6.4f}")
+        print(f"step: {step:>6d} | run_time: {ti:>10.4f} | loss_train: {loss_tr:>8.6f} | loss_val: {loss_val:>8.6f} | lr: {lr:>8.6f}")
 
     if step % 500 == 0:
         # ===== 保存检查点 =====
